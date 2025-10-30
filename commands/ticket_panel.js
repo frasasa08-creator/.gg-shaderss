@@ -140,7 +140,7 @@ module.exports = {
                 .setColor(color)
                 .setTimestamp()
                 .setFooter({ 
-                    text: 'OBLIVION X $VG - Ticket. credit: sasa1111',
+                    text: 'Powered by @sasa1111',
                     iconURL: interaction.guild.iconURL() 
                 });
 
