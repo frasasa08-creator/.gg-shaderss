@@ -127,7 +127,7 @@ async function createTicket(interaction, optionValue) {
 
         // Crea l'embed di benvenuto del ticket
         const welcomeEmbed = new EmbedBuilder()
-            .setTitle(`🎫 Ticket: ${selectedOption.name}`)
+            .setTitle(`🎟 Ticket: ${selectedOption.name}`)
             .setDescription(`Ciao ${user.toString()}!\n\nGrazie per aver aperto un ticket. Un membro dello staff ti risponderà il prima possibile.\n\n**Tipo:** ${selectedOption.name}\n**Categoria:** ${selectedOption.category}`)
             .setColor(0x0099ff)
             .setTimestamp()
@@ -162,7 +162,7 @@ async function createTicket(interaction, optionValue) {
                     
                     const newSelectMenu = new StringSelectMenuBuilder()
                         .setCustomId(selectMenu.customId || 'ticket_select')
-                        .setPlaceholder('🎫 Scegli una opzione...');
+                        .setPlaceholder('🎟 Scegli una opzione...');
                     
                     if (selectMenu.options) {
                         newSelectMenu.addOptions(selectMenu.options);
@@ -279,7 +279,7 @@ async function closeTicketWithReason(interaction) {
                     .setTitle('📋 Transcript del tuo Ticket')
                     .setDescription(`Ecco il transcript del ticket che hai aperto su **${interaction.guild.name}**\n\n**Scarica il file qui sotto per visualizzare la conversazione completa.**`)
                     .addFields(
-                        { name: '🎫 Tipo Ticket', value: ticket.ticket_type, inline: true },
+                        { name: '🎟 Tipo Ticket', value: ticket.ticket_type, inline: true },
                         { name: '📅 Aperto il', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
                         { name: '🔒 Chiuso da', value: user.toString(), inline: true },
                         { name: '📝 Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
@@ -309,7 +309,7 @@ async function closeTicketWithReason(interaction) {
             .setDescription(`Il ticket è stato chiuso da ${user.toString()}\n\nIl transcript è stato inviato in DM all'utente.`)
             .addFields(
                 { name: '👤 Aperto da', value: `<@${ticket.user_id}>`, inline: true },
-                { name: '🎫 Tipo', value: ticket.ticket_type, inline: true },
+                { name: '🎟 Tipo', value: ticket.ticket_type, inline: true },
                 { name: '🔒 Chiuso da', value: user.toString(), inline: true },
                 { name: '📝 Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
                 { name: '📅 Data apertura', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true }
@@ -333,7 +333,7 @@ async function closeTicketWithReason(interaction) {
                     .setTitle('📋 Ticket Chiuso - Log')
                     .addFields(
                         { name: '👤 Utente', value: `<@${ticket.user_id}>`, inline: true },
-                        { name: '🎫 Tipo', value: ticket.ticket_type, inline: true },
+                        { name: '🎟 Tipo', value: ticket.ticket_type, inline: true },
                         { name: '🔒 Chiuso da', value: user.toString(), inline: true },
                         { name: '📝 Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
                         { name: '📅 Aperto', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
