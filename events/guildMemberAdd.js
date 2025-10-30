@@ -1,6 +1,6 @@
 const { Events, EmbedBuilder } = require('discord.js');
 const db = require('../db');
-const { createCanvas, loadImage } = require('canvas');
+const { createWelcomeEmbed } = require('../utils/welcomeUtils'); // Assicurati che il percorso sia corretto
 
 module.exports = {
     name: Events.GuildMemberAdd,
@@ -125,12 +125,12 @@ async function logRoleRestoration(member, restoredRoles, failedRoles) {
     }
 }
 
-// ==================== FUNZIONE SISTEMA WELCOME (ESISTENTE) ====================
+// ==================== FUNZIONE SISTEMA WELCOME (MODIFICATA) ====================
 async function handleWelcomeSystem(member) {
     try {
-        // Recupera le impostazioni welcome dal DB
+        // Recupera le impostazioni welcome dal DB - AGGIUNTO welcome_embed_color
         const result = await db.query(
-            'SELECT welcome_channel_id, welcome_log_channel_id, welcome_image_url FROM guild_settings WHERE guild_id = $1',
+            'SELECT welcome_channel_id, welcome_log_channel_id, welcome_image_url, welcome_embed_color FROM guild_settings WHERE guild_id = $1',
             [member.guild.id]
         );
 
@@ -138,102 +138,35 @@ async function handleWelcomeSystem(member) {
             return;
         }
 
-        const welcomeChannel = member.guild.channels.cache.get(result.rows[0].welcome_channel_id);
+        const settings = result.rows[0];
+        const welcomeChannel = member.guild.channels.cache.get(settings.welcome_channel_id);
         if (!welcomeChannel) {
             return;
         }
 
-        // Crea immagine welcome personalizzata con sfondo caricato
+        // USA L'EMBED INVECE DI CANVAS
         try {
-            const canvas = createCanvas(800, 300);
-            const ctx = canvas.getContext('2d');
+            const welcomeMessage = await createWelcomeEmbed(
+                member.user,
+                member.guild.memberCount,
+                settings.welcome_image_url,
+                settings.welcome_embed_color || 0xFFFFFF // Default bianco
+            );
 
-            // Carica l'immagine di sfondo dal database
-            if (result.rows[0].welcome_image_url) {
-                try {
-                    const background = await loadImage(result.rows[0].welcome_image_url);
-                    // Disegna l'immagine di sfondo che copre tutto il canvas
-                    ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-                } catch (bgError) {
-                    console.error('Errore caricamento immagine sfondo:', bgError);
-                    // Fallback: sfondo nero se l'immagine non carica
-                    ctx.fillStyle = '#000000';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                }
-            } else {
-                // Nessuna immagine, sfondo nero
-                ctx.fillStyle = '#000000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
+            await welcomeChannel.send(welcomeMessage);
+            console.log(`✅ Embed welcome inviato per ${member.user.tag}`);
 
-            // Cerchio avatar con bordo
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(150, 150, 70, 0, Math.PI * 2, true);
-            ctx.closePath();
-            ctx.clip();
-
-            // Carica avatar utente
-            const avatar = await loadImage(member.user.displayAvatarURL({ extension: 'jpg', size: 512 }));
-            ctx.drawImage(avatar, 80, 80, 140, 140);
-            ctx.restore();
-
-            // Bordo cerchio avatar
-            ctx.beginPath();
-            ctx.arc(150, 150, 70, 0, Math.PI * 2, true);
-            ctx.lineWidth = 5;
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.stroke();
-
-            // Testo "BENVENUTO"
-            ctx.font = 'bold 55px Arial';
-            ctx.fillStyle = '#FFFFFF';
-            ctx.textAlign = 'left';
-            ctx.fillText('WELCOME', 300, 120);
-
-            // Nome utente
-            ctx.font = 'bold 45px Arial';
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(member.user.username, 300, 170);
-
-            // Ombra per i testi
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-            ctx.shadowBlur = 10;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
-
-            // Riscrivi i testi con ombra
-            ctx.font = 'bold 55px Arial';
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText('WELCOME', 300, 120);
-
-            ctx.font = 'bold 45px Arial';
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(member.user.username, 300, 170);
-
-            // Converti in buffer e invia
-            const buffer = canvas.toBuffer('image/png');
-            
-            await welcomeChannel.send({
-                files: [{
-                    attachment: buffer,
-                    name: `welcome-${member.user.username}.png`
-                }]
-            });
-
-            console.log(`✅ Welcome image creata per ${member.user.tag}`);
-
-        } catch (canvasError) {
-            console.error('Errore creazione welcome image:', canvasError);
+        } catch (embedError) {
+            console.error('Errore creazione embed welcome:', embedError);
             // Fallback: messaggio semplice
             await welcomeChannel.send({
-                content: `🎉 **BENVENUTO ${member.user.username.toUpperCase()}** nel server!`
+                content: `🎉 **WELCOME ${member.user.username.toUpperCase()}** in Shaderss! Sei il ${member.guild.memberCount}° membro!`
             });
         }
 
         // LOG dell'arrivo nel canale welcome log (separato)
-        if (result.rows[0].welcome_log_channel_id) {
-            const logChannel = member.guild.channels.cache.get(result.rows[0].welcome_log_channel_id);
+        if (settings.welcome_log_channel_id) {
+            const logChannel = member.guild.channels.cache.get(settings.welcome_log_channel_id);
             if (logChannel) {
                 const logEmbed = new EmbedBuilder()
                     .setTitle('👤 Nuovo Membro')
