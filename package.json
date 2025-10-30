@@ -1,0 +1,32 @@
+{
+  "name": "discord-bot-advanced",
+  "version": "1.0.0",
+  "description": "Bot Discord avanzato con sistema welcome, ticket e moderazione",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "canvas": "^2.11.2",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "express": "^5.1.0",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
+    "pg": "^8.11.3",
+    "pm2": "^6.0.13"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "welcome",
+    "ticket",
+    "moderation"
+  ],
+  "author": "sasa",
+  "license": "MIT"
+}
