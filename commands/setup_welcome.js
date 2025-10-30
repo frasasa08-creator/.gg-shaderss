@@ -25,6 +25,29 @@ async function checkPermissions(interaction) {
     return allowedRoles.some(roleId => userRoles.has(roleId));
 }
 
+// Funzione per verificare e aggiungere la colonna se non esiste
+async function ensureEmbedColorColumnExists() {
+    try {
+        // Verifica se la colonna esiste
+        const checkResult = await db.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'guild_settings' AND column_name = 'welcome_embed_color'
+        `);
+        
+        if (checkResult.rows.length === 0) {
+            // La colonna non esiste, la aggiungiamo
+            console.log('Aggiungendo colonna welcome_embed_color...');
+            await db.query(`
+                ALTER TABLE guild_settings ADD COLUMN welcome_embed_color INTEGER DEFAULT 16777215
+            `);
+            console.log('Colonna welcome_embed_color aggiunta con successo');
+        }
+    } catch (error) {
+        console.error('Errore verifica colonna welcome_embed_color:', error);
+    }
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setup_welcome')
@@ -43,27 +66,35 @@ module.exports = {
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('welcome_image')
-                .setDescription('URL o carica un\'immagine PNG per il benvenuto')
+                .setDescription('URL dell\'immagine per il benvenuto')
                 .setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .addStringOption(option =>
+            option.setName('embed_color')
+                .setDescription('Colore dell\'embed in esadecimale (es. #FFFFFF per bianco)')
+                .setRequired(false)),
 
     async execute(interaction) {
         try {
             // Controllo permessi
             const hasPermission = await checkPermissions(interaction);
             if (!hasPermission) {
-                return await interaction.reply({
+                const reply = await interaction.reply({
                     content: '❌ Non hai i permessi necessari per utilizzare questo comando.',
                     ephemeral: true
                 });
+                return reply;
             }
 
             await interaction.deferReply({ ephemeral: true });
+
+            // Assicurati che la colonna esista
+            await ensureEmbedColorColumnExists();
 
             const welcomeChannel = interaction.options.getChannel('welcome_channel');
             const welcomeLogChannel = interaction.options.getChannel('welcome_log_channel');
             const quitLogChannel = interaction.options.getChannel('quit_log_channel');
             const welcomeImage = interaction.options.getString('welcome_image');
+            const embedColor = interaction.options.getString('embed_color') || '#FFFFFF';
 
             // Validazione canali
             if (welcomeChannel.type !== 0) {
@@ -82,23 +113,40 @@ module.exports = {
                 });
             }
 
-            // Salvataggio nel database
+            // Validazione colore
+            const colorRegex = /^#?([0-9A-F]{6})$/i;
+            let finalColor = 0xFFFFFF; // Bianco di default
+            
+            if (embedColor) {
+                const cleanColor = embedColor.replace('#', '');
+                if (colorRegex.test(cleanColor)) {
+                    finalColor = parseInt(cleanColor, 16);
+                } else {
+                    return await interaction.editReply({ 
+                        content: '❌ Il colore deve essere in formato esadecimale (es. #FFFFFF per bianco)!'
+                    });
+                }
+            }
+
+            // Salvataggio nel database - query aggiornata per gestire la colonna
             await db.query(`
-                INSERT INTO guild_settings (guild_id, welcome_channel_id, welcome_log_channel_id, quit_log_channel_id, welcome_image_url)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO guild_settings (guild_id, welcome_channel_id, welcome_log_channel_id, quit_log_channel_id, welcome_image_url, welcome_embed_color)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (guild_id)
                 DO UPDATE SET
-                    welcome_channel_id = $2,
-                    welcome_log_channel_id = $3,
-                    quit_log_channel_id = $4,
-                    welcome_image_url = $5,
+                    welcome_channel_id = EXCLUDED.welcome_channel_id,
+                    welcome_log_channel_id = EXCLUDED.welcome_log_channel_id,
+                    quit_log_channel_id = EXCLUDED.quit_log_channel_id,
+                    welcome_image_url = EXCLUDED.welcome_image_url,
+                    welcome_embed_color = EXCLUDED.welcome_embed_color,
                     updated_at = CURRENT_TIMESTAMP
             `, [
                 interaction.guild.id,
                 welcomeChannel.id,
                 welcomeLogChannel.id,
                 quitLogChannel.id,
-                welcomeImage
+                welcomeImage,
+                finalColor
             ]);
 
             // Embed di conferma
@@ -109,9 +157,10 @@ module.exports = {
                     { name: '📨 Canale Welcome', value: `<#${welcomeChannel.id}>`, inline: true },
                     { name: '📋 Log Welcome', value: `<#${welcomeLogChannel.id}>`, inline: true },
                     { name: '🚪 Log Uscite', value: `<#${quitLogChannel.id}>`, inline: true },
-                    { name: '🖼️ Immagine', value: '[Clicca qui per vedere](' + welcomeImage + ')', inline: false }
+                    { name: '🖼️ Immagine', value: '[Clicca qui per vedere](' + welcomeImage + ')', inline: true },
+                    { name: '🎨 Colore Embed', value: `#${finalColor.toString(16).toUpperCase().padStart(6, '0')}`, inline: true }
                 )
-                .setColor(0x00ff00)
+                .setColor(finalColor)
                 .setTimestamp();
 
             await interaction.editReply({ embeds: [embed] });

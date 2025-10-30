@@ -151,7 +151,7 @@ module.exports = {
             // Crea il menu select
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('ticket_select')
-                .setPlaceholder('🎫 Scegli una opzione...')
+                .setPlaceholder('🎟 Scegli una opzione...')
                 .setMinValues(1)
                 .setMaxValues(1);
 

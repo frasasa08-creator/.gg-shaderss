@@ -72,7 +72,44 @@ module.exports = {
                 .addChannelOption(option =>
                     option
                         .setName('canale')
-                        .setDescription('Canale per i log moderazione (kick, ban, timeout, ruoli)')
+                        .setDescription('Canale per i log moderazione (kick, ban, timeout)')
+                        .setRequired(true)
+                        .addChannelTypes(ChannelType.GuildText)
+                )
+        )
+        // AGGIUNGI QUESTI NUOVI SUBCOMMANDS
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('rolelog')
+                .setDescription('Imposta il canale per i log dei ruoli')
+                .addChannelOption(option =>
+                    option
+                        .setName('canale')
+                        .setDescription('Canale per i log ruoli (creazione/modifica/eliminazione)')
+                        .setRequired(true)
+                        .addChannelTypes(ChannelType.GuildText)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('channellog')
+                .setDescription('Imposta il canale per i log dei canali')
+                .addChannelOption(option =>
+                    option
+                        .setName('canale')
+                        .setDescription('Canale per i log canali (creazione/modifica/eliminazione)')
+                        .setRequired(true)
+                        .addChannelTypes(ChannelType.GuildText)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('messagelog')
+                .setDescription('Imposta il canale per i log dei messaggi')
+                .addChannelOption(option =>
+                    option
+                        .setName('canale')
+                        .setDescription('Canale per i log messaggi (eliminazioni)')
                         .setRequired(true)
                         .addChannelTypes(ChannelType.GuildText)
                 )
@@ -125,7 +162,7 @@ module.exports = {
             if (subcommand === 'show') {
                 // Mostra configurazione attuale
                 const result = await db.query(
-                    'SELECT welcome_channel_id, welcome_log_channel_id, quit_log_channel_id, moderation_log_channel_id, ticket_log_channel_id, welcome_image_url, settings FROM guild_settings WHERE guild_id = $1',
+                    'SELECT welcome_channel_id, welcome_log_channel_id, quit_log_channel_id, moderation_log_channel_id, role_log_channel_id, channel_log_channel_id, message_log_channel_id, ticket_log_channel_id, welcome_image_url, settings FROM guild_settings WHERE guild_id = $1',
                     [interaction.guild.id]
                 );
 
@@ -166,6 +203,21 @@ module.exports = {
                         { 
                             name: '🛡️ Log Moderazione', 
                             value: config.moderation_log_channel_id ? `<#${config.moderation_log_channel_id}>` : '❌ Non impostato', 
+                            inline: true 
+                        },
+                        { 
+                            name: '🏷️ Log Ruoli', 
+                            value: config.role_log_channel_id ? `<#${config.role_log_channel_id}>` : '❌ Non impostato', 
+                            inline: true 
+                        },
+                        { 
+                            name: '📁 Log Canali', 
+                            value: config.channel_log_channel_id ? `<#${config.channel_log_channel_id}>` : '❌ Non impostato', 
+                            inline: true 
+                        },
+                        { 
+                            name: '🗑️ Log Messaggi', 
+                            value: config.message_log_channel_id ? `<#${config.message_log_channel_id}>` : '❌ Non impostato', 
                             inline: true 
                         },
                         { 
@@ -245,6 +297,19 @@ module.exports = {
                 case 'modlog':
                     fieldName = 'moderation_log_channel_id';
                     description = `🛡️ Canale log moderazione impostato a ${channel.toString()}`;
+                    break;
+                // AGGIUNGI QUESTI NUOVI CASI
+                case 'rolelog':
+                    fieldName = 'role_log_channel_id';
+                    description = `🏷️ Canale log ruoli impostato a ${channel.toString()}`;
+                    break;
+                case 'channellog':
+                    fieldName = 'channel_log_channel_id';
+                    description = `📁 Canale log canali impostato a ${channel.toString()}`;
+                    break;
+                case 'messagelog':
+                    fieldName = 'message_log_channel_id';
+                    description = `🗑️ Canale log messaggi impostato a ${channel.toString()}`;
                     break;
                 case 'ticketlog':
                     fieldName = 'ticket_log_channel_id';
