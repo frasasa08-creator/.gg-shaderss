@@ -5,6 +5,31 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+// DEBUG ESTESO
+console.log('=== DEBUG AMBIENTE ===');
+console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
+console.log('🔧 Directory corrente:', __dirname);
+console.log('🔧 File .env caricato?', process.env.DISCORD_TOKEN ? 'SI' : 'NO');
+console.log('🔧 Lunghezza token:', process.env.DISCORD_TOKEN ? process.env.DISCORD_TOKEN.length : 'N/A');
+console.log('🔧 Prime 10 char token:', process.env.DISCORD_TOKEN ? process.env.DISCORD_TOKEN.substring(0, 10) + '...' : 'N/A');
+console.log('🔧 Client ID:', process.env.CLIENT_ID || 'NON TROVATO');
+console.log('=====================');
+
+// SE IL TOKEN NON C'È, FERMIAMOCI SUBITO
+if (!process.env.DISCORD_TOKEN) {
+    console.error('❌ ERRORE CRITICO: Token non trovato!');
+    console.error('📁 Controlla che il file .env sia nella stessa cartella di index.js');
+    console.error('🔧 Contenuto attuale di .env:');
+    try {
+        const fs = require('fs');
+        const envContent = fs.readFileSync('.env', 'utf8');
+        console.log(envContent);
+    } catch (e) {
+        console.log('Impossibile leggere .env');
+    }
+    process.exit(1);
+}
+
 const db = require('./db');  // importa db da nuovo file
 
 // Log iniziali per debug
