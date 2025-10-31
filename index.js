@@ -344,36 +344,6 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// === FUNZIONE PER ESTRARRE SERVER ID DAL NOME FILE ===
-function extractServerIdFromFilename(filename) {
-    // Cerca pattern: ticket-{tipo}-{username}-{data}-{ticketId}-{serverId}.html
-    const patterns = [
-        // Pattern: qualcosa-{serverId}.html
-        /-(\d{17,19})\.html$/,
-        // Pattern: {serverId}-qualcosa.html
-        /^(\d{17,19})-.*\.html$/,
-        // Pattern: qualcosa_{serverId}.html
-        /_(\d{17,19})\.html$/,
-        // Pattern: {serverId}_qualcosa.html
-        /^(\d{17,19})_.*\.html$/
-    ];
-    
-    for (const pattern of patterns) {
-        const match = filename.match(pattern);
-        if (match && match[1]) {
-            return match[1];
-        }
-    }
-    
-    // Se non trova pattern, cerca qualsiasi numero di 17-19 cifre nel filename
-    const fallbackMatch = filename.match(/(\d{17,19})/);
-    if (fallbackMatch && fallbackMatch[1]) {
-        return fallbackMatch[1];
-    }
-    
-    return null;
-}
-
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
 app.get('/transcript/:identifier', (req, res) => {
     const identifier = req.params.identifier.toLowerCase();
@@ -403,12 +373,125 @@ app.get('/transcript/:identifier', (req, res) => {
         return res.sendFile(exactPath);
     }
     
-    // Se non trova il file, cerca file che contengono l'identifier
+    // Se non trova il file, mostra tutti i file disponibili per debug
     try {
         const allFiles = fs.readdirSync(transcriptDir)
             .filter(f => f.endsWith('.html') && f !== '.gitkeep');
         
         console.log(`📁 File disponibili nella cartella:`, allFiles);
+        
+        // Crea un transcript di test se non ci sono file
+        if (allFiles.length === 0) {
+            console.log('🛠️ Creo transcript di test...');
+            const testTranscript = `
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript di Test - ${identifier}</title>
+    <style>
+        body { 
+            background: #36393f; 
+            color: #ffffff; 
+            font-family: 'Segoe UI', sans-serif; 
+            padding: 20px; 
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header { 
+            background: #2f3136; 
+            padding: 25px; 
+            border-radius: 10px; 
+            margin-bottom: 20px; 
+            border-left: 5px solid #5865F2;
+        }
+        .message { 
+            background: #40444b; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 10px 0; 
+            border-left: 3px solid #5865F2;
+        }
+        .user-message { 
+            background: #2f3136; 
+            margin-left: 50px;
+        }
+        .staff-message { 
+            background: #4f545c; 
+            margin-right: 50px;
+        }
+        .timestamp {
+            color: #72767d;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        .debug-info {
+            background: #2f3136;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 30px;
+            border: 1px solid #5865F2;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎫 Transcript di Test</h1>
+        <p><strong>Ticket ID:</strong> ${identifier}</p>
+        <p><strong>Data:</strong> ${new Date().toLocaleString('it-IT')}</p>
+        <p>Questo è un transcript di prova generato automaticamente dal sistema.</p>
+    </div>
+    
+    <div class="message user-message">
+        <strong>👤 User123:</strong> Ciao, ho bisogno di aiuto con il prodotto!
+        <div class="timestamp">${new Date(Date.now() - 3600000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message staff-message">
+        <strong>🛡️ Staff Member:</strong> Ciao! Sono qui per aiutarti. Qual è il problema?
+        <div class="timestamp">${new Date(Date.now() - 3000000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message user-message">
+        <strong>👤 User123:</strong> Non riesco ad accedere al mio account.
+        <div class="timestamp">${new Date(Date.now() - 2400000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message staff-message">
+        <strong>🛡️ Staff Member:</strong> Prova a resettare la password dal link "Password dimenticata".
+        <div class="timestamp">${new Date(Date.now() - 1800000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message user-message">
+        <strong>👤 User123:</strong> Funziona! Grazie mille per l'aiuto!
+        <div class="timestamp">${new Date(Date.now() - 600000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message staff-message">
+        <strong>🛡️ Staff Member:</strong> Di nulla! Buona giornata! 🎉
+        <div class="timestamp">${new Date().toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="debug-info">
+        <h3>🔧 Informazioni di Debug</h3>
+        <p><strong>Ticket Identifier:</strong> ${identifier}</p>
+        <p><strong>Cartella Transcripts:</strong> ${transcriptDir}</p>
+        <p><strong>File Creato:</strong> ${identifier}.html</p>
+        <p><strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}</p>
+        <p><strong>Data Generazione:</strong> ${new Date().toLocaleString('it-IT')}</p>
+        <p><em>Questo transcript è stato generato automaticamente per testare il sistema.</em></p>
+    </div>
+</body>
+</html>`;
+            
+            const testFilePath = path.join(transcriptDir, `${identifier}.html`);
+            fs.writeFileSync(testFilePath, testTranscript);
+            console.log(`✅ Transcript di test creato: ${identifier}.html`);
+            
+            res.setHeader('Content-Type', 'text/html');
+            return res.send(testTranscript);
+        }
         
         // Cerca file che contengono l'identifier nel nome
         const matchingFiles = allFiles.filter(file => {
@@ -429,7 +512,7 @@ app.get('/transcript/:identifier', (req, res) => {
         console.error('Errore ricerca transcript:', error);
     }
 
-    // Mostra pagina di errore
+    // Mostra pagina di errore con più dettagli
     let folderInfo = 'Cartella non esistente';
     let fileCount = 0;
     let allFilesList = [];
@@ -496,6 +579,13 @@ app.get('/transcript/:identifier', (req, res) => {
             background: #4752c4;
             transform: translateY(-2px);
         }
+        .btn-test {
+            background: #00ff88;
+            color: #000;
+        }
+        .btn-test:hover {
+            background: #00cc6a;
+        }
     </style>
 </head>
 <body>
@@ -518,8 +608,15 @@ app.get('/transcript/:identifier', (req, res) => {
     </div>
 
     <div style="margin-top: 30px;">
+        <a href="/transcript/${identifier}" class="btn btn-test">🛠️ Crea Transcript di Test</a>
         <a href="/transcripts" class="btn">📂 Vedi tutti i transcript</a>
         <a href="/" class="btn">🏠 Torna alla Home</a>
+    </div>
+
+    <div style="margin-top: 40px; padding: 20px; background: #2f3136; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <h3>💡 Cosa fare?</h3>
+        <p>Se stai testando il sistema, clicca "Crea Transcript di Test" per generare un transcript di esempio.</p>
+        <p>Se questo è un ticket reale, verifica che il sistema di creazione transcript sia configurato correttamente.</p>
     </div>
 </body>
 </html>
@@ -992,7 +1089,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     }
 });
 
-// === ROTTA TRANSCRIPT PER SERVER SPECIFICO CON FILTRAGGIO ===
+// === ROTTA TRANSCRIPT PER SERVER SPECIFICO MIGLIORATA ===
 app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
         const guildId = req.params.guildId;
@@ -1027,7 +1124,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // LEGGI E FILTRA I TRANSCRIPT PER SERVER
+        // LEGGI TUTTI I TRANSCRIPT (NON FILTRARE PER SERVER)
         const transcriptDir = path.join(__dirname, 'transcripts');
         let list = '';
 
@@ -1038,24 +1135,16 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
         if (fs.existsSync(transcriptDir)) {
             const allFiles = fs.readdirSync(transcriptDir)
-                .filter(f => f.endsWith('.html') && f !== '.gitkeep');
+                .filter(f => f.endsWith('.html') && f !== '.gitkeep')
+                .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
 
             console.log(`📁 Tutti i file transcript trovati:`, allFiles.length);
 
-            // Filtra i file per server ID
-            const serverFiles = allFiles.filter(file => {
-                const serverId = extractServerIdFromFilename(file);
-                console.log(`🔍 File: ${file} -> Server ID: ${serverId}`);
-                return serverId === guildId;
-            }).sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
-
-            console.log(`📁 File filtrati per server ${guildId}:`, serverFiles.length);
-
-            list = serverFiles.length > 0 ? `
+            list = allFiles.length > 0 ? `
                 <div class="transcript-header">
                     <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
                     <div class="transcript-stats">
-                        <span class="stat"><i class="fas fa-folder"></i> ${serverFiles.length} transcript trovati</span>
+                        <span class="stat"><i class="fas fa-folder"></i> ${allFiles.length} transcript totali</span>
                         <span class="stat"><i class="fas fa-server"></i> Server ID: ${guildId}</span>
                         <span class="user-info">
                             <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
@@ -1067,18 +1156,16 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 
                 <div style="background: #2f3136; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #5865F2;">
                     <p style="margin: 0; font-size: 0.9rem; color: #b9bbbe;">
-                        <strong>💡 Info:</strong> Mostrando solo i transcript del server <strong>${userGuild.name}</strong>.
-                        File totali: ${allFiles.length} | File filtrati: ${serverFiles.length}
+                        <strong>💡 Info:</strong> Mostrando tutti i transcript disponibili. Il sistema di filtraggio per server sarà implementato prossimamente.
                     </p>
                 </div>
                 
                 <div class="transcript-list">
-                    ${serverFiles.map(file => {
+                    ${allFiles.map(file => {
                         const name = file.replace('.html', '');
                         const stats = fs.statSync(path.join(transcriptDir, file));
                         const date = new Date(stats.mtime).toLocaleString('it-IT');
                         const size = (stats.size / 1024).toFixed(2);
-                        const serverId = extractServerIdFromFilename(file);
                         
                         return `
                         <div class="transcript-item">
@@ -1090,7 +1177,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                                 <div class="transcript-meta">
                                     <span><i class="far fa-clock"></i> ${date}</span>
                                     <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
-                                    <span><i class="fas fa-server"></i> ${serverId || 'N/A'}</span>
+                                    <span><i class="fas fa-file"></i> ${file}</span>
                                 </div>
                             </div>
                             <div class="transcript-actions">
@@ -1107,20 +1194,16 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             ` : `
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <h3>Nessun transcript trovato per questo server</h3>
-                    <p>Non ci sono transcript archiviati per <strong>${userGuild.name}</strong>.</p>
+                    <h3>Nessun transcript trovato</h3>
+                    <p>Non ci sono ancora transcript archiviati nel sistema.</p>
                     <div style="margin-top: 15px; padding: 15px; background: var(--border); border-radius: 8px; text-align: left;">
                         <p style="margin: 5px 0;"><strong>Debug Info:</strong></p>
                         <p style="margin: 5px 0; font-size: 0.9rem;">Server ID: ${guildId}</p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">File totali nella cartella: ${allFiles.length}</p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">File filtrati per questo server: ${serverFiles.length}</p>
-                        ${allFiles.length > 0 ? `
-                            <p style="margin: 5px 0; font-size: 0.9rem;">
-                                <strong>File disponibili (non filtrati):</strong><br>
-                                ${allFiles.slice(0, 10).map(f => `• ${f} (server: ${extractServerIdFromFilename(f) || 'N/A'})`).join('<br>')}
-                                ${allFiles.length > 10 ? `<br>... e altri ${allFiles.length - 10} file` : ''}
-                            </p>
-                        ` : ''}
+                        <p style="margin: 5px 0; font-size: 0.9rem;">Cartella transcript: ${transcriptDir}</p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">Cartella esistente: ${fs.existsSync(transcriptDir) ? '✅' : '❌'}</p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">
+                            <a href="/transcript/test-ticket-${Date.now()}" style="color: #5865F2;">Crea un transcript di test</a>
+                        </p>
                     </div>
                 </div>
             `;
@@ -1868,7 +1951,7 @@ app.get('/', (req, res) => {
             <p class="tagline">Discord Bot • 24/7 • Advanced Features</p>
             <div class="btn-group">
                 <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" class="btn">
-                    <i class="fas fa-robot"></i> Invita Bot
+                    <i class="fas fa-robot"></i>Invita Bot
                 </a>
             </div>
         </header>
@@ -1944,100 +2027,92 @@ app.get('/', (req, res) => {
     </div>
 
     <script>
-        // Funzione per aggiornare lo status del bot
-        async function updateBotStatus() {
+        async function updateStatus() {
             try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
+                const res = await fetch('/api/status');
+                const data = await res.json();
                 
-                // Aggiorna i valori nella pagina
-                document.getElementById('statusText').textContent = data.bot.status;
-                document.getElementById('statusText').className = 'status-value status-' + data.bot.status.toLowerCase();
-                document.getElementById('tag').textContent = data.bot.tag;
-                document.getElementById('guilds').textContent = data.bot.guilds;
-                document.getElementById('ping').textContent = data.bot.ping + ' ms';
-                document.getElementById('uptime').textContent = data.bot.uptime;
+                if (data.bot.status === 'ONLINE') {
+                    document.getElementById('statusText').className = 'status-value status-online';
+                    document.getElementById('statusText').textContent = 'ONLINE';
+                } else {
+                    document.getElementById('statusText').className = 'status-value status-offline';
+                    document.getElementById('statusText').textContent = 'OFFLINE';
+                }
                 
-            } catch (error) {
-                console.error('Errore nel caricamento status:', error);
-                document.getElementById('statusText').textContent = 'OFFLINE';
+                document.getElementById('tag').textContent = data.bot.tag.split('#')[0] || '-';
+                document.getElementById('guilds').textContent = data.bot.guilds || '-';
+                document.getElementById('ping').textContent = data.bot.ping + ' ms' || '- ms';
+                document.getElementById('uptime').textContent = data.bot.uptime || '-';
+                
+            } catch(e) {
+                console.error('Errore aggiornamento status:', e);
                 document.getElementById('statusText').className = 'status-value status-offline';
+                document.getElementById('statusText').textContent = 'OFFLINE';
             }
         }
 
-        // Aggiorna lo status ogni 30 secondi
-        updateBotStatus();
-        setInterval(updateBotStatus, 30000);
+        updateStatus();
+        setInterval(updateStatus, 10000);
     </script>
 </body>
 </html>
     `);
 });
 
-// === INIZIALIZZAZIONE BOT DISCORD ===
+// Avvia server web
+let server;
+try {
+    server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Server web attivo sulla porta ${PORT}`);
+        console.log(`🌐 Status page: https://gg-shaderss.onrender.com`);
+        
+        // Crea la cartella transcripts all'avvio
+        const transcriptDir = path.join(__dirname, 'transcripts');
+        if (!fs.existsSync(transcriptDir)) {
+            fs.mkdirSync(transcriptDir, { recursive: true });
+            console.log('📁 Cartella transcripts creata');
+        }
+    });
+} catch (error) {
+    console.error('❌ Errore avvio server web:', error);
+}
+
+// Collezioni comandi e cooldown
 client.commands = new Collection();
 client.cooldowns = new Collection();
 
 // Caricamento comandi
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
-    
     if ('data' in command && 'execute' in command) {
         client.commands.set(command.data.name, command);
-        console.log(`✅ Comando caricato: ${command.data.name}`);
-    } else {
-        console.log(`❌ Comando non valido: ${file}`);
     }
 }
 
 // Caricamento eventi
 const eventsPath = path.join(__dirname, 'events');
 const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
-
 for (const file of eventFiles) {
     const filePath = path.join(eventsPath, file);
     const event = require(filePath);
-    
     if (event.once) {
         client.once(event.name, (...args) => event.execute(...args));
     } else {
         client.on(event.name, (...args) => event.execute(...args));
     }
-    console.log(`✅ Evento caricato: ${event.name}`);
 }
 
-// === REGISTRAZIONE COMANDI SLASH ===
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-(async () => {
-    try {
-        console.log('🔄 Registrazione comandi slash...');
-        
-        const commands = Array.from(client.commands.values()).map(cmd => cmd.data.toJSON());
-        
-        const data = await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
-            { body: commands }
-        );
-        
-        console.log(`✅ ${data.length} comandi slash registrati con successo`);
-    } catch (error) {
-        console.error('❌ Errore registrazione comandi:', error);
-    }
-})();
-
-// === GESTIONE INTERAZIONI ===
+// Gestione interazioni
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand() && !interaction.isStringSelectMenu() && !interaction.isButton() && !interaction.isModalSubmit()) return;
     
     if (interaction.isCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
-        
         try {
             await command.execute(interaction);
         } catch (error) {
@@ -2086,7 +2161,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// === INIZIALIZZAZIONE DATABASE ===
+// Inizializza database
 async function initDatabase() {
     try {
         await db.query(`
@@ -2123,73 +2198,89 @@ async function initDatabase() {
     }
 }
 
-// === DEPLOY COMANDI GLOBALI ===
 let isDeploying = false;
 async function deployCommands() {
-    if (process.env.REGISTER_COMMANDS !== 'true' || isDeploying) {
-        console.log('⏭️ Deploy comandi SKIPPATO');
-        return;
-    }
-    isDeploying = true;
-    console.log('🚀 Inizio DEPLOY GLOBALE dei comandi...');
-    
-    const commands = Array.from(client.commands.values()).map(cmd => cmd.data.toJSON());
-    
-    if (commands.length === 0) {
-        console.log('⚠️ Nessun comando da registrare');
-        isDeploying = false;
-        return;
-    }
-    
-    console.log(`📦 ${commands.length} comandi caricati`);
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    
+  if (process.env.REGISTER_COMMANDS !== 'true' || isDeploying) {
+    console.log('⏭️ Deploy SKIPPATO');
+    return;
+  }
+  isDeploying = true;
+  console.log('🚀 Inizio DEPLOY GLOBALE dei comandi...');
+  const commands = [];
+  const commandsPath = path.join(__dirname, 'commands');
+  const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+  for (const file of commandFiles) {
     try {
-        console.log('🔄 Registrazione comandi GLOBALI...');
-        const data = await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
-            { body: commands }
-        );
-        console.log(`✅ ${data.length} comandi registrati GLOBALMENTE!`);
-    } catch (error) {
-        console.error('❌ ERRORE DEPLOY GLOBALE:', error);
+      const command = require(`./commands/${file}`);
+      if (command.data?.name) {
+        commands.push(command.data.toJSON());
+      }
+    } catch (err) {
+      console.error(`❌ Errore comando ${file}:`, err.message);
     }
-    
-    console.log('🎉 Deploy globale completato!');
+  }
+  if (commands.length === 0) {
+    console.log('⚠️ Nessun comando da registrare');
     isDeploying = false;
+    return;
+  }
+  console.log(`📦 ${commands.length} comandi caricati`);
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+  try {
+    console.log('🔄 Registrazione comandi GLOBALI...');
+    const data = await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+    console.log(`✅ ${data.length} comandi registrati GLOBALMENTE!`);
+  } catch (error) {
+    console.error('❌ ERRORE DEPLOY GLOBALE:', error);
+  }
+  console.log('🎉 Deploy globale completato!');
+  isDeploying = false;
 }
 
-// === AVVIO BOT ===
+// Avvio bot
 client.once('ready', async () => {
     console.log(`✅ Bot online come ${client.user.tag}`);
     console.log(`🏠 Server: ${client.guilds.cache.size} server`);
-    
+   
     await initDatabase();
     await deployCommands();
     await detectPreviousCrash(client);
     await initializeStatusSystem(client);
     await updateBotStatus(client, 'online', 'Avvio completato');
-    
+   
     client.user.setActivity({
         name: `${client.guilds.cache.size} servers | /help`,
         type: 3
     });
-    
+   
     setInterval(() => {
         updateStatusPeriodically(client);
     }, 5 * 60 * 1000);
 });
 
-// === GESTIONE SHUTDOWN GRACEFUL ===
+// Gestione shutdown graceful
 async function gracefulShutdown(reason = 'Unknown') {
     console.log(`🔴 Arresto bot in corso... Motivo: ${reason}`);
-    
+   
+    try {
+        if (server) {
+            server.close(() => {
+                console.log('✅ Server web chiuso');
+            });
+        }
+    } catch (error) {
+        console.error('❌ Errore chiusura server web:', error);
+    }
+   
     try {
         await updateBotStatus(client, 'offline', `Arresto: ${reason}`);
     } catch (error) {
         console.error('❌ Errore aggiornamento status:', error);
     }
-    
+   
     try {
         if (client && !client.destroyed) {
             client.destroy();
@@ -2198,7 +2289,7 @@ async function gracefulShutdown(reason = 'Unknown') {
     } catch (error) {
         console.error('❌ Errore distruzione client:', error);
     }
-    
+   
     setTimeout(() => {
         process.exit(0);
     }, 3000);
@@ -2206,57 +2297,21 @@ async function gracefulShutdown(reason = 'Unknown') {
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-
-// === AVVIO SERVER WEB ===
-let server;
-try {
-    server = app.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Server web attivo sulla porta ${PORT}`);
-        console.log(`🌐 Dashboard: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
-        console.log(`🔧 Health check: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}/health`);
-        
-        // Crea la cartella transcripts all'avvio
-        const transcriptDir = path.join(__dirname, 'transcripts');
-        if (!fs.existsSync(transcriptDir)) {
-            fs.mkdirSync(transcriptDir, { recursive: true });
-            console.log('📁 Cartella transcripts creata');
-        }
-    });
-} catch (error) {
-    console.error('❌ Errore avvio server web:', error);
-}
-
-// === GESTIONE ERRORI FINALE ===
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', async (error) => {
     console.error('❌ Eccezione non catturata:', error);
+    setTimeout(() => process.exit(1), 1000);
+});
+process.on('unhandledRejection', async (error) => {
+    console.error('❌ Promise rejection non gestito:', error);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Promise rejection non gestito:', reason);
-});
+// Export client e db
+module.exports = { client, db };
 
-// Verifica variabili d'ambiente
-const requiredEnvVars = ['DISCORD_TOKEN', 'CLIENT_ID', 'DISCORD_CLIENT_SECRET'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-
-if (missingEnvVars.length > 0) {
-    console.error('❌ Variabili d\'ambiente mancanti:', missingEnvVars);
-    console.error('⚠️  Assicurati di aver configurato tutte le variabili necessarie in .env');
-} else {
-    console.log('✅ Tutte le variabili d\'ambiente necessarie sono presenti');
-}
-
-// Avvia il bot
-console.log('🚀 Avvio del bot Discord...');
+// Login bot
 client.login(process.env.DISCORD_TOKEN).catch(error => {
-    console.error('❌ Errore durante il login del bot:', error);
+    console.error('❌ Errore login bot:', error);
     process.exit(1);
 });
 
-// Messaggio di avvio completato
-console.log('✅ Index.js completamente caricato e pronto!');
-console.log('📊 Dashboard web disponibile su:', process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`);
-console.log('🤖 Bot Discord in fase di avvio...');
-
-// Export client e db per uso esterno
-module.exports = { client, db, app };
+console.log('File index.js caricato completamente');
