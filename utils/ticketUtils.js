@@ -245,7 +245,16 @@ async function closeTicketWithReason(interaction) {
 
                 await ticketCreator.send({
                     content: '**Transcript chiuso:**',
-                    embeds: [dmEmbed]
+                    embeds: [dmEmbed],
+                    components: [
+                        new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setLabel('Visualizza Transcript Online')
+                                .setStyle(ButtonStyle.Link)
+                                .setURL(transcriptUrl)
+                                .setEmoji('📄')
+                        )
+                    ]
                 });
             } catch (dmError) {
                 await channel.send({ content: `Non ho potuto inviare il link a <@${ticket.user_id}>. DM chiusi?` });
@@ -266,7 +275,18 @@ async function closeTicketWithReason(interaction) {
             .setColor(0xff0000)
             .setTimestamp();
 
-        await channel.send({ embeds: [closeEmbed] });
+        await channel.send({
+            embeds: [closeEmbed],
+            components: [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('Visualizza Transcript')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL(transcriptUrl)
+                        .setEmoji('🔗')
+                )
+            ]
+        });
 
         // === LOG CANALE ===
         const logResult = await db.query('SELECT ticket_log_channel_id FROM guild_settings WHERE guild_id = $1', [interaction.guild.id]);
@@ -287,7 +307,19 @@ async function closeTicketWithReason(interaction) {
                     )
                     .setColor(0xff0000)
                     .setTimestamp();
-                await logChannel.send({ content: '**Transcript:**', embeds: [logEmbed] });
+                await logChannel.send({
+                    content: '**Transcript:**',
+                    embeds: [logEmbed],
+                    components: [
+                        new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setLabel('Apri Transcript')
+                                .setStyle(ButtonStyle.Link)
+                                .setURL(transcriptUrl)
+                                .setEmoji('📋')
+                        )
+                    ]
+                });
             }
         }
 
