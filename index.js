@@ -549,9 +549,6 @@ async function initDatabase() {
     }
 }
 
-const fs = require('fs');
-const path = require('path');
-
 let isDeploying = false;
 
 async function deployCommands() {
