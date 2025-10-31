@@ -1246,6 +1246,9 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                                 <button onclick="copyTranscriptLink('${name}')" class="btn-copy" title="Copia link">
                                     <i class="fas fa-copy"></i>
                                 </button>
+                                <button onclick="deleteTranscript('${name}')" class="btn-delete" title="Elimina transcript">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </div>`;
                     }).join('')}
@@ -1552,6 +1555,26 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             gap: 8px;
         }
 
+        .btn-delete {
+            background: var(--error);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.85rem;
+        }
+        
+        .btn-delete:hover {
+            background: #d83639;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(237, 66, 69, 0.3);
+        }
+
         .btn-logout:hover {
             background: #d83639;
         }
@@ -1643,13 +1666,124 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 }, 2000);
             });
         }
+
+        /**
+         * Elimina un transcript
+         */
+        async function deleteTranscript(transcriptName) {
+            if (!confirm('Sei sicuro di voler eliminare questo transcript?\n\nQuesta azione è irreversibile!')) {
+                return;
+            }
+        
+            try {
+                const response = await fetch(`/transcript/${transcriptName}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+        
+                const result = await response.json();
+        
+                if (result.success) {
+                    // Mostra notifica successo
+                    showNotification('✅ Transcript eliminato con successo!', 'success');
+                    
+                    // Rimuovi l'elemento dalla lista
+                    const transcriptItem = event.target.closest('.transcript-item');
+                    if (transcriptItem) {
+                        transcriptItem.style.opacity = '0';
+                        transcriptItem.style.transform = 'translateX(-100px)';
+                        setTimeout(() => {
+                            transcriptItem.remove();
+                            // Aggiorna contatore
+                            updateTranscriptCount();
+                        }, 300);
+                    }
+                } else {
+                    showNotification('❌ Errore: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Errore eliminazione:', error);
+                showNotification('❌ Errore di connessione', 'error');
+            }
+        }
+        
+        /**
+         * Mostra notifica
+         */
+        function showNotification(message, type = 'info') {
+            // ... codice notifiche che hai già ...
+        }
+        
+        /**
+         * Aggiorna contatore transcript
+         */
+        function updateTranscriptCount() {
+            const items = document.querySelectorAll('.transcript-item');
+            const countElement = document.querySelector('.transcript-stats .stat:first-child');
+            if (countElement) {
+                const countText = countElement.textContent;
+                const newCount = items.length;
+                countElement.innerHTML = `<i class="fas fa-folder"></i> ${newCount} transcript trovati`;
+            }
+        }
+        
     </script>
 </body>
 </html>
+
+
+
         `);
     } catch (error) {
         console.error('❌ Errore nel caricamento transcript server:', error);
         res.status(500).send('Errore interno del server');
+    }
+});
+
+// === ROTTA PER ELIMINARE TRANSCRIPT ===
+app.delete('/transcript/:filename', checkStaffRole, async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        const transcriptDir = path.join(__dirname, 'transcripts');
+        const filePath = path.join(transcriptDir, `${filename}.html`);
+
+        console.log(`🗑️ Tentativo eliminazione: ${filename}`);
+
+        // Verifica che il file esista
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Transcript non trovato' 
+            });
+        }
+
+        // Verifica che sia un file HTML (sicurezza)
+        if (!filename.endsWith('.html') && !filename.match(/^[a-zA-Z0-9-_]+$/)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Nome file non valido' 
+            });
+        }
+
+        // Elimina il file
+        fs.unlinkSync(filePath);
+        
+        console.log(`✅ Transcript eliminato: ${filename}`);
+
+        res.json({ 
+            success: true, 
+            message: 'Transcript eliminato con successo',
+            deletedFile: filename
+        });
+
+    } catch (error) {
+        console.error('❌ Errore eliminazione transcript:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Errore interno del server durante l\'eliminazione' 
+        });
     }
 });
 
