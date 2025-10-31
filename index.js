@@ -6,6 +6,7 @@ const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
+const { cleanupOldTranscripts } = require('./utils/ticketUtils');
 require('dotenv').config();
 const db = require('./db');
 
@@ -19,6 +20,25 @@ const client = new Client({
         GatewayIntentBits.GuildModeration,
     ],
 });
+
+// Avvia pulizia automatica all'avvio e ogni 24 ore
+async function startAutoCleanup() {
+    try {
+        console.log('🧹 Avvio pulizia automatica transcript...');
+        await cleanupOldTranscripts(7);
+        
+        // Esegui pulizia ogni 24 ore
+        setInterval(async () => {
+            console.log('🔄 Esecuzione pulizia automatica giornaliera...');
+            await cleanupOldTranscripts(7);
+        }, 24 * 60 * 60 * 1000); // 24 ore
+        
+        console.log('✅ Pulizia automatica configurata (ogni 24 ore)');
+    } catch (error) {
+        console.error('❌ Errore avvio pulizia automatica:', error);
+    }
+}
+
 
 // === FUNZIONE MIGLIORATA PER ESTRARRE SERVER ID DAL NOME FILE ===
 function extractServerIdFromFilename(filename) {
@@ -1177,7 +1197,8 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
             console.log(`🎯 File filtrati per server ${guildId}:`, serverFiles.length);
 
-            list = serverFiles.length > 0 ? `
+            if (serverFiles.length > 0) {
+                list = `
                 <div class="transcript-header">
                     <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
                     <div class="transcript-stats">
@@ -1226,11 +1247,16 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                                 <button onclick="copyTranscriptLink('${name}')" class="btn-copy" title="Copia link">
                                     <i class="fas fa-copy"></i>
                                 </button>
+                                <button onclick="deleteTranscript('${name}', event)" class="btn-delete" title="Elimina transcript">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </div>`;
                     }).join('')}
                 </div>
-            ` : `
+            `;
+            } else {
+                list = `
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
                     <h3>Nessun transcript trovato per questo server</h3>
@@ -1272,6 +1298,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                     </div>
                 </div>
             `;
+            }
         } else {
             list = `
                 <div class="empty-state">
@@ -1285,8 +1312,8 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             `;
         }
 
-        res.send(`
-<!DOCTYPE html>
+        // HTML finale - VERSIONE SICURA
+        const html = `<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -1532,6 +1559,26 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             gap: 8px;
         }
 
+        .btn-delete {
+            background: var(--error);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.85rem;
+        }
+        
+        .btn-delete:hover {
+            background: #d83639;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(237, 66, 69, 0.3);
+        }
+
         .btn-logout:hover {
             background: #d83639;
         }
@@ -1611,7 +1658,6 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         function copyTranscriptLink(transcriptId) {
             const link = window.location.origin + '/transcript/' + transcriptId;
             navigator.clipboard.writeText(link).then(() => {
-                // Mostra feedback
                 const btn = event.target.closest('.btn-copy');
                 const originalHTML = btn.innerHTML;
                 btn.innerHTML = '<i class="fas fa-check"></i>';
@@ -1623,13 +1669,141 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 }, 2000);
             });
         }
+
+        async function deleteTranscript(transcriptName, event) {
+            if (!confirm('Sei sicuro di voler eliminare questo transcript?\\n\\n⚠️ Questa azione è irreversibile!')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/transcript/' + encodeURIComponent(transcriptName), {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('✅ Transcript eliminato con successo!', 'success');
+                    
+                    const transcriptItem = event.target.closest('.transcript-item');
+                    if (transcriptItem) {
+                        transcriptItem.style.opacity = '0';
+                        transcriptItem.style.transform = 'translateX(-100px)';
+                        setTimeout(() => {
+                            transcriptItem.remove();
+                            updateTranscriptCount();
+                        }, 300);
+                    }
+                } else {
+                    showNotification('❌ Errore: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Errore eliminazione:', error);
+                showNotification('❌ Errore di connessione', 'error');
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = \`
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 8px;
+                color: white;
+                z-index: 10000;
+                font-weight: 600;
+                font-family: 'Inter', sans-serif;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                transition: all 0.3s ease;
+                \${type === 'success' ? 'background: #00ff88; color: #000;' : ''}
+                \${type === 'error' ? 'background: #ed4245;' : ''}
+                \${type === 'info' ? 'background: #5865F2;' : ''}
+            \`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.transform = 'translateX(0)';
+            }, 10);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100px)';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
+        }
+        
+        function updateTranscriptCount() {
+            const items = document.querySelectorAll('.transcript-item');
+            const countElement = document.querySelector('.transcript-stats .stat:first-child');
+            if (countElement) {
+                const newCount = items.length;
+                countElement.innerHTML = '<i class="fas fa-folder"></i> ' + newCount + ' transcript trovati';
+            }
+        }
     </script>
 </body>
-</html>
-        `);
+</html>`;
+
+        res.send(html);
+
     } catch (error) {
         console.error('❌ Errore nel caricamento transcript server:', error);
         res.status(500).send('Errore interno del server');
+    }
+});
+
+// === ROTTA PER ELIMINARE TRANSCRIPT ===
+app.delete('/transcript/:filename', checkStaffRole, async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        const transcriptDir = path.join(__dirname, 'transcripts');
+        const filePath = path.join(transcriptDir, `${filename}.html`);
+
+        console.log(`🗑️ Tentativo eliminazione: ${filename}`);
+
+        // Verifica che il file esista
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Transcript non trovato' 
+            });
+        }
+
+        // Verifica che sia un file HTML (sicurezza)
+        if (!filename.endsWith('.html') && !filename.match(/^[a-zA-Z0-9-_]+$/)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Nome file non valido' 
+            });
+        }
+
+        // Elimina il file
+        fs.unlinkSync(filePath);
+        
+        console.log(`✅ Transcript eliminato: ${filename}`);
+
+        res.json({ 
+            success: true, 
+            message: 'Transcript eliminato con successo',
+            deletedFile: filename
+        });
+
+    } catch (error) {
+        console.error('❌ Errore eliminazione transcript:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Errore interno del server durante l\'eliminazione' 
+        });
     }
 });
 
@@ -2315,6 +2489,7 @@ client.once('ready', async () => {
     await detectPreviousCrash(client);
     await initializeStatusSystem(client);
     await updateBotStatus(client, 'online', 'Avvio completato');
+    await startAutoCleanup();
    
     client.user.setActivity({
         name: `${client.guilds.cache.size} servers | /help`,
