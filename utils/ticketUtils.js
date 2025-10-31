@@ -282,20 +282,13 @@ async function closeTicketWithReason(interaction) {
                         { name: 'Aperto', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
                         { name: 'Chiuso da', value: user.toString(), inline: true },
                         { name: 'Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
-                        { name: 'Canale', value: `#${channel.name}`, inline: true }
+                        { name: 'Canale', value: `#${channel.name}`, inline: true },
+                        { name: 'Scadenza', value: `<t:${Math.floor((Date.now() + (7 * 24 * 60 * 60 * 1000)) / 1000)}:R>`, inline: true }
                     )
                     .setColor(0x0099ff)
                     .setTimestamp()
                     .setFooter({ text: `Disponibile per 7 giorni` });
-                .addFields(
-                    { name: 'Tipo', value: ticket.ticket_type, inline: true },
-                    { name: 'Aperto', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
-                    { name: 'Chiuso da', value: user.toString(), inline: true },
-                    { name: 'Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
-                    { name: 'Canale', value: `#${channel.name}`, inline: true },
-                    { name: 'Scadenza', value: `<t:${Math.floor((Date.now() + (7 * 24 * 60 * 60 * 1000)) / 1000)}:R>`, inline: true } // 👈 AGGIUNGI QUESTO
-                )
-
+                
                 await ticketCreator.send({
                     content: '**Transcript chiuso:**',
                     embeds: [dmEmbed],
