@@ -83,6 +83,40 @@ app.get('/api/status', (req, res) => {
     }
 });
 
+// ROTTA TRANSCRIPT ONLINE
+app.get('/transcript/:identifier', (req, res) => {
+    const identifier = req.params.identifier.toLowerCase();
+    const transcriptDir = path.join(__dirname, 'transcripts');
+    const filePath = path.join(transcriptDir, `${identifier}.html`);
+
+    if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', 'text/html');
+        return res.sendFile(filePath);
+    }
+
+    res.status(404).send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript non trovato</title>
+    <style>
+        body { background: #1e1f23; color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #ed4245; }
+        p { font-size: 1.2em; }
+        .discord { color: #5865F2; }
+    </style>
+</head>
+<body>
+    <h1>Transcript non trovato</h1>
+    <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
+    <p>Torna tra 7 giorni? No, è già andato.</p>
+</body>
+</html>
+    `);
+});
+
 // Health check migliorato
 app.get('/health', (req, res) => {
     if (client && client.isReady()) {
