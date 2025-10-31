@@ -44,17 +44,29 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Configurazione Passport con URL dinamico
+// DEBUG: Log delle variabili d'ambiente (rimuovi in produzione)
+console.log('🔧 DEBUG Variabili OAuth:');
+console.log('CLIENT_ID:', process.env.CLIENT_ID ? 'Presente' : 'Mancante');
+console.log('DISCORD_CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? 'Presente' : 'Mancante');
+console.log('RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL || 'Non impostato');
+
+// Configurazione Passport con URL dinamico e debugging
 const getCallbackURL = () => {
+    let callbackURL;
+    
     if (process.env.RENDER_EXTERNAL_URL) {
-        return `${process.env.RENDER_EXTERNAL_URL}/auth/discord/callback`;
+        callbackURL = `${process.env.RENDER_EXTERNAL_URL}/auth/discord/callback`;
+    } else if (process.env.CALLBACK_URL) {
+        callbackURL = process.env.CALLBACK_URL;
+    } else {
+        callbackURL = `http://localhost:${PORT}/auth/discord/callback`;
     }
-    if (process.env.CALLBACK_URL) {
-        return process.env.CALLBACK_URL;
-    }
-    return `http://localhost:${PORT}/auth/discord/callback`;
+    
+    console.log('🌐 Callback URL generato:', callbackURL);
+    return callbackURL;
 };
 
+// Configurazione DiscordStrategy con error handling migliorato
 passport.use(new DiscordStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
@@ -62,21 +74,34 @@ passport.use(new DiscordStrategy({
     scope: ['identify', 'guilds']
 }, async (accessToken, refreshToken, profile, done) => {
     try {
-        console.log('🔑 Utente autenticato:', profile.username);
-        console.log('🌐 Callback URL utilizzato:', getCallbackURL());
+        console.log('🔑 Utente autenticato con successo:', profile.username);
+        console.log('📋 Dati profile:', {
+            id: profile.id,
+            username: profile.username,
+            discriminator: profile.discriminator,
+            guilds: profile.guilds ? profile.guilds.length : 0
+        });
+        
+        // Aggiungi i guilds al profile per i controlli staff
+        if (profile.guilds) {
+            profile.guilds = profile.guilds;
+        }
+        
         return done(null, profile);
     } catch (error) {
-        console.error('❌ Errore autenticazione:', error);
+        console.error('❌ Errore durante autenticazione:', error);
         return done(error, null);
     }
 }));
 
 // Serializzazione e deserializzazione
 passport.serializeUser((user, done) => {
+    console.log('💾 Serializzazione utente:', user.username);
     done(null, user);
 });
 
 passport.deserializeUser((user, done) => {
+    console.log('📖 Deserializzazione utente:', user.username);
     done(null, user);
 });
 
@@ -100,13 +125,23 @@ function requireAuth(req, res, next) {
 app.use(requireAuth);
 
 // === ROTTE DI AUTENTICAZIONE ===
-app.get('/auth/discord', passport.authenticate('discord'));
+app.get('/auth/discord', (req, res, next) => {
+    console.log('🚀 Inizio autenticazione OAuth');
+    passport.authenticate('discord')(req, res, next);
+});
 
 app.get('/auth/discord/callback',
-    passport.authenticate('discord', { 
-        failureRedirect: '/auth/failure'
-    }),
+    (req, res, next) => {
+        console.log('🔄 Callback OAuth ricevuto');
+        console.log('📊 Query parameters:', req.query);
+        console.log('❌ Error parameter:', req.query.error);
+        
+        passport.authenticate('discord', { 
+            failureRedirect: '/auth/failure'
+        })(req, res, next);
+    },
     (req, res) => {
+        console.log('✅ Autenticazione completata per:', req.user.username);
         const returnTo = req.session.returnTo || '/';
         delete req.session.returnTo;
         res.redirect(returnTo);
@@ -114,6 +149,10 @@ app.get('/auth/discord/callback',
 );
 
 app.get('/auth/failure', (req, res) => {
+    console.log('❌ Autenticazione fallita');
+    const error = req.query.error || 'Errore sconosciuto';
+    const errorDescription = req.query.error_description || 'Nessuna descrizione';
+    
     res.send(`
         <!DOCTYPE html>
         <html>
@@ -123,18 +162,35 @@ app.get('/auth/failure', (req, res) => {
                 body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
                 .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
                        border-radius: 8px; text-decoration: none; margin: 10px; }
+                .error-details { background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
             </style>
         </head>
         <body>
             <h1>❌ Autenticazione Fallita</h1>
-            <p>Impossibile accedere con Discord. Riprova.</p>
+            <p>Impossibile accedere con Discord.</p>
+            
+            <div class="error-details">
+                <strong>Dettagli errore:</strong><br>
+                Codice: ${error}<br>
+                Descrizione: ${errorDescription}
+            </div>
+            
+            <p>Verifica che:</p>
+            <ul style="text-align: left; display: inline-block;">
+                <li>Il bot sia invitato nel server</li>
+                <li>I permessi OAuth siano configurati correttamente</li>
+                <li>Il callback URL sia impostato correttamente</li>
+            </ul>
+            <br>
             <a href="/auth/discord" class="btn">Riprova Login</a>
+            <a href="/" class="btn">Torna alla Home</a>
         </body>
         </html>
     `);
 });
 
 app.get('/logout', (req, res) => {
+    console.log('🚪 Logout utente:', req.user?.username);
     req.logout((err) => {
         if (err) {
             console.error('Logout error:', err);
@@ -154,7 +210,13 @@ function checkStaffRole(req, res, next) {
     const allowedGuilds = process.env.ALLOWED_GUILDS ? process.env.ALLOWED_GUILDS.split(',') : [];
     const staffRoleIds = process.env.STAFF_ROLE_IDS ? process.env.STAFF_ROLE_IDS.split(',') : [];
     
+    console.log('👮 Controllo permessi staff per:', req.user.username);
+    console.log('🏠 Server consentiti:', allowedGuilds);
+    console.log('🎯 Ruoli staff:', staffRoleIds);
+    
     const userGuilds = req.user.guilds || [];
+    console.log('📋 Server utente:', userGuilds.map(g => ({ id: g.id, name: g.name, permissions: g.permissions })));
+    
     const hasAccess = userGuilds.some(guild => {
         const hasGuildAccess = allowedGuilds.includes(guild.id);
         const hasStaffRole = staffRoleIds.some(roleId => 
@@ -162,12 +224,21 @@ function checkStaffRole(req, res, next) {
         );
         const isAdmin = (guild.permissions & 0x8) === 0x8;
         
+        console.log(`🔍 Controllo server ${guild.id}:`, {
+            hasGuildAccess,
+            hasStaffRole,
+            isAdmin,
+            permissions: guild.permissions
+        });
+        
         return hasGuildAccess && (hasStaffRole || isAdmin);
     });
 
     if (hasAccess) {
+        console.log('✅ Accesso staff consentito');
         return next();
     } else {
+        console.log('❌ Accesso staff negato');
         return res.status(403).send(`
             <!DOCTYPE html>
             <html>
@@ -622,6 +693,10 @@ app.get('/transcripts', checkStaffRole, (req, res) => {
 
 // === HOMEPAGE MODERNA (protetta) ===
 app.get('/', (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.redirect('/auth/discord');
+    }
+
     res.send(`
 <!DOCTYPE html>
 <html lang="it">
