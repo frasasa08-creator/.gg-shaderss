@@ -100,7 +100,7 @@ app.get('/health', (req, res) => {
     }
 });
 
-// === PAGINA PRINCIPALE: STATUS + WIDGET (GRIGIO/NERO/BIANCO) ===
+// === PAGINA PRINCIPALE: STATUS + WIDGET + PULSANTE INVITO ===
 app.get('/', (req, res) => {
     // Fallback JSON per Render
     if (req.headers['user-agent']?.includes('Render') || req.query.raw) {
@@ -110,6 +110,9 @@ app.get('/', (req, res) => {
             timestamp: new Date().toISOString()
         });
     }
+
+    // Link di invito (sostituisci con il tuo CLIENT_ID)
+    const INVITE_LINK = `https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8`;
 
     res.send(`
 <!DOCTYPE html>
@@ -136,6 +139,7 @@ app.get('/', (req, res) => {
     .container {
       background: var(--card); border: 1px solid var(--border); border-radius: 16px;
       padding: 32px; max-width: 900px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      position: relative;
     }
     .header {
       text-align: center; margin-bottom: 32px;
@@ -146,11 +150,26 @@ app.get('/', (req, res) => {
     .header p {
       color: var(--text-light); margin-top: 8px; font-size: 1rem;
     }
+    .invite-btn {
+      position: absolute; top: 20px; right: 20px;
+      background: #5865F2; color: white; padding: 10px 18px;
+      border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+      text-decoration: none; display: flex; align-items: center; gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+    }
+    .invite-btn:hover {
+      background: #4752c4; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(88, 101, 242, 0.4);
+    }
+    .invite-btn svg {
+      width: 18px; height: 18px;
+    }
     .grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
     }
     @media (max-width: 768px) {
       .grid { grid-template-columns: 1fr; }
+      .invite-btn { position: static; margin-bottom: 20px; justify-self: center; }
     }
     .card {
       background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid var(--border);
@@ -183,9 +202,15 @@ app.get('/', (req, res) => {
 </head>
 <body>
   <div class="container">
+    <!-- PULSANTE INVITA -->
+    <a href="${INVITE_LINK}" target="_blank" class="invite-btn">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a13.83 13.83 0 0 0 1.226-1.963a.074.074 0 0 0-.041-.105a13.2 13.2 0 0 1-1.872-.878a.075.075 0 0 1-.008-.125a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.075.075 0 0 1-.006.125a12.3 12.3 0 0 1-1.873.878a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.963a.077.077 0 0 0 .084.028a19.9 19.9 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.057c.49-5.38-.2-9.89-3.45-13.66a.07.07 0 0 0-.032-.027z"/></svg>
+      Invita il Bot
+    </a>
+
     <div class="header">
       <h1>.gg/shaderss</h1>
-      <p>Bot Discord • 24/7 • Render Hosted</p>
+      <p>Bot Discord • Sempre online • Render Hosted</p>
     </div>
 
     <div class="grid">
@@ -214,9 +239,9 @@ app.get('/', (req, res) => {
     </div>
 
     <div class="footer">
-      Powered <span style="color:#ff4444;"></span> by @sasa1111
+      Made with <span style="color:#ff4444;">♥</span> by sasa1111
     </div>
-    <div class="refresh"></div>
+    <div class="refresh">Aggiornamento automatico ogni 10 secondi</div>
   </div>
 
   <script>
