@@ -377,55 +377,6 @@ app.get('/transcript/:identifier', (req, res) => {
     `);
 });
 
-// === MIDDLEWARE PER VERIFICA STAFF ===
-function checkStaffRole(req, res, next) {
-    if (!req.isAuthenticated()) {
-        return res.redirect('/auth/discord');
-    }
-
-    const allowedGuilds = process.env.ALLOWED_GUILDS ? process.env.ALLOWED_GUILDS.split(',') : [];
-    const staffRoleIds = process.env.STAFF_ROLE_IDS ? process.env.STAFF_ROLE_IDS.split(',') : [];
-    
-    console.log('👮 Controllo permessi staff per:', req.user.username);
-    
-    const userGuilds = req.user.guilds || [];
-    const hasAccess = userGuilds.some(guild => {
-        const hasGuildAccess = allowedGuilds.includes(guild.id);
-        const hasStaffRole = staffRoleIds.some(roleId => 
-            guild.roles && guild.roles.includes(roleId)
-        );
-        const isAdmin = (guild.permissions & 0x8) === 0x8;
-        
-        return hasGuildAccess && (hasStaffRole || isAdmin);
-    });
-
-    if (hasAccess) {
-        console.log('✅ Accesso staff consentito');
-        return next();
-    } else {
-        console.log('❌ Accesso staff negato');
-        return res.status(403).send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Accesso Negato</title>
-                <style>
-                    body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
-                    .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
-                           border-radius: 8px; text-decoration: none; margin: 10px; }
-                </style>
-            </head>
-            <body>
-                <h1>❌ Accesso Negato</h1>
-                <p>Non hai i permessi necessari per accedere a questa pagina.</p>
-                <a href="/" class="btn">Torna alla Home</a>
-                <a href="/logout" class="btn">Logout</a>
-            </body>
-            </html>
-        `);
-    }
-}
-
 // === MIDDLEWARE PER VERIFICA STAFF - INTEGRATO CON ALLOWEDROLES ===
 async function checkStaffRole(req, res, next) {
     if (!req.isAuthenticated()) {
@@ -574,32 +525,14 @@ async function checkStaffRole(req, res, next) {
     }
 }
 
-// === ROTTA DEBUG PER VERIFICARE I PERMESSI ===
-app.get('/debug-permissions', async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.redirect('/auth/discord');
-    }
-
+// === ROTTA PER SELEZIONARE IL SERVER ===
+app.get('/transcripts', checkStaffRole, async (req, res) => {
     try {
-        const userInfo = {
-            username: req.user.username,
-            id: req.user.id,
-            guilds: []
-        };
+        const userGuilds = req.user.guilds || [];
+        const accessibleGuilds = [];
 
-        // Per ogni guild, controlla le impostazioni dal database
-        for (const guild of req.user.guilds || []) {
-            const guildInfo = {
-                id: guild.id,
-                name: guild.name,
-                permissions: guild.permissions,
-                isAdmin: (guild.permissions & 0x8) === 0x8,
-                userRoles: guild.roles || [],
-                settings: null,
-                hasAccess: false
-            };
-
-            // Cerca le impostazioni del server
+        // Trova tutti i server dove l'utente ha accesso ai transcript
+        for (const guild of userGuilds) {
             const result = await db.query(
                 'SELECT settings FROM guild_settings WHERE guild_id = $1',
                 [guild.id]
@@ -607,138 +540,410 @@ app.get('/debug-permissions', async (req, res) => {
 
             if (result.rows.length > 0) {
                 const settings = result.rows[0].settings || {};
-                guildInfo.settings = settings;
-                guildInfo.allowedRoles = settings.allowed_roles || [];
-                
-                // Controlla accesso
-                const hasAllowedRole = guildInfo.userRoles.some(roleId => 
-                    guildInfo.allowedRoles.includes(roleId)
-                );
-                guildInfo.hasAccess = hasAllowedRole || guildInfo.isAdmin;
-            } else {
-                guildInfo.settings = 'Nessuna impostazione trovata';
-                guildInfo.allowedRoles = [];
-                guildInfo.hasAccess = guildInfo.isAdmin; // Solo admin se nessuna impostazione
-            }
+                const allowedRoles = settings.allowed_roles || [];
+                const userRoles = guild.roles || [];
+                const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
+                const isAdmin = (guild.permissions & 0x8) === 0x8;
 
-            userInfo.guilds.push(guildInfo);
+                if (hasAllowedRole || isAdmin) {
+                    accessibleGuilds.push({
+                        id: guild.id,
+                        name: guild.name,
+                        icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
+                        memberCount: guild.approximate_member_count || 'N/A'
+                    });
+                }
+            } else {
+                // Se non ci sono impostazioni, solo admin può accedere
+                const isAdmin = (guild.permissions & 0x8) === 0x8;
+                if (isAdmin) {
+                    accessibleGuilds.push({
+                        id: guild.id,
+                        name: guild.name,
+                        icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
+                        memberCount: guild.approximate_member_count || 'N/A'
+                    });
+                }
+            }
         }
 
-        // Crea una pagina HTML leggibile
-        res.send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Debug Permessi</title>
-                <style>
-                    body { background: #1e1f23; color: white; font-family: sans-serif; padding: 20px; }
-                    .guild { background: #2f3136; margin: 10px 0; padding: 15px; border-radius: 8px; }
-                    .has-access { border-left: 5px solid #00ff88; }
-                    .no-access { border-left: 5px solid #ed4245; }
-                    .role { display: inline-block; background: #5865F2; padding: 2px 8px; border-radius: 4px; margin: 2px; font-size: 0.9em; }
-                    .allowed-role { background: #00ff88; color: black; }
-                </style>
-            </head>
-            <body>
-                <h1>🔍 Debug Permessi - ${userInfo.username}</h1>
-                
-                ${userInfo.guilds.map(guild => `
-                    <div class="guild ${guild.hasAccess ? 'has-access' : 'no-access'}">
-                        <h3>${guild.name} ${guild.hasAccess ? '✅' : '❌'}</h3>
-                        <p><strong>ID:</strong> ${guild.id}</p>
-                        <p><strong>Admin:</strong> ${guild.isAdmin ? '✅' : '❌'}</p>
-                        
-                        <p><strong>Ruoli utente:</strong><br>
-                        ${guild.userRoles.map(roleId => `<span class="role">${roleId}</span>`).join('') || 'Nessun ruolo'}</p>
-                        
-                        <p><strong>Ruoli consentiti:</strong><br>
-                        ${guild.allowedRoles ? guild.allowedRoles.map(roleId => 
-                            `<span class="role allowed-role ${guild.userRoles.includes(roleId) ? 'user-has-role' : ''}">${roleId}</span>`
-                        ).join('') : 'Nessun ruolo consentito'}</p>
-                        
-                        <p><strong>Accesso transcript:</strong> ${guild.hasAccess ? '✅ CONSENTITO' : '❌ NEGATO'}</p>
+        // Se c'è solo un server accessibile, redirect diretto
+        if (accessibleGuilds.length === 1) {
+            return res.redirect(`/transcripts/${accessibleGuilds[0].id}`);
+        }
+
+        // Se non ci sono server accessibili
+        if (accessibleGuilds.length === 0) {
+            return res.status(403).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Nessun Accesso</title>
+                    <style>
+                        body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                        .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin: 10px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>❌ Nessun Server Accessibile</h1>
+                    <p>Non hai i permessi per visualizzare i transcript in nessun server.</p>
+                    <a href="/" class="btn">Torna alla Home</a>
+                </body>
+                </html>
+            `);
+        }
+
+        // Mostra il menu di selezione server
+        const serverOptions = accessibleGuilds.map(guild => `
+            <div class="server-option" onclick="selectServer('${guild.id}')">
+                <div class="server-icon">
+                    ${guild.icon ? `<img src="${guild.icon}" alt="${guild.name}">` : '<div class="default-icon"><i class="fas fa-server"></i></div>'}
+                </div>
+                <div class="server-info">
+                    <div class="server-name">${guild.name}</div>
+                    <div class="server-meta">
+                        <span class="server-id">ID: ${guild.id}</span>
+                        <span class="server-members"><i class="fas fa-users"></i> ${guild.memberCount}</span>
                     </div>
-                `).join('')}
-                
-                <br>
-                <a href="/" style="color: #5865F2;">← Torna alla Home</a>
-            </body>
-            </html>
-        `);
-
-    } catch (error) {
-        console.error('Errore debug:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// === ROTTA TRANSCRIPT PROTETTA (SOLO STAFF) ===
-app.get('/transcripts', checkStaffRole, (req, res) => {
-    const transcriptDir = path.join(__dirname, 'transcripts');
-    let list = '';
-
-    if (fs.existsSync(transcriptDir)) {
-        const files = fs.readdirSync(transcriptDir)
-            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
-            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
-
-        list = files.length > 0 ? `
-            <div class="transcript-header">
-                <h2><i class="fas fa-file-alt"></i> Transcript Archiviati</h2>
-                <div class="transcript-stats">
-                    <span class="stat"><i class="fas fa-folder"></i> ${files.length} transcript totali</span>
-                    <span class="user-info">
-                        <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
-                             class="user-avatar" alt="Avatar">
-                        ${req.user.username}
-                    </span>
+                </div>
+                <div class="server-arrow">
+                    <i class="fas fa-chevron-right"></i>
                 </div>
             </div>
-            <div class="transcript-list">
-                ${files.map(file => {
-                    const name = file.replace('.html', '');
-                    const stats = fs.statSync(path.join(transcriptDir, file));
-                    const date = new Date(stats.mtime).toLocaleString('it-IT');
-                    const size = (stats.size / 1024).toFixed(2);
-                    
-                    return `
-                    <div class="transcript-item">
-                        <div class="transcript-info">
-                            <div class="transcript-name">
-                                <i class="fas fa-ticket-alt"></i>
-                                <a href="/transcript/${name}" target="_blank">#${name}</a>
-                            </div>
-                            <div class="transcript-meta">
-                                <span><i class="far fa-clock"></i> ${date}</span>
-                                <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
-                            </div>
-                        </div>
-                        <div class="transcript-actions">
-                            <a href="/transcript/${name}" target="_blank" class="btn-view">
-                                <i class="fas fa-eye"></i> Visualizza
-                            </a>
-                        </div>
-                    </div>`;
-                }).join('')}
-            </div>
-        ` : `
-            <div class="empty-state">
-                <i class="fas fa-inbox"></i>
-                <h3>Nessun transcript trovato</h3>
-                <p>Non ci sono ancora transcript archiviati.</p>
-            </div>
-        `;
-    } else {
-        list = '<div class="error-state">Cartella transcript non trovata.</div>';
-    }
+        `).join('');
 
-    res.send(`
+        res.send(`
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript - Staff Area</title>
+    <title>Seleziona Server - Transcript</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --background: #0f0f12;
+            --card-bg: #1a1a1d;
+            --text-primary: #ffffff;
+            --text-secondary: #b9bbbe;
+            --border: #2f3136;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .header h1 {
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 10px;
+            background: var(--border);
+            border-radius: 8px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .server-selection {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .server-option {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .server-option:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        .server-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .server-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .default-icon {
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .server-info {
+            flex: 1;
+        }
+
+        .server-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+            color: var(--text-primary);
+        }
+
+        .server-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .server-members {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .server-arrow {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--border);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+
+        .btn:hover {
+            background: var(--primary);
+        }
+
+        @media (max-width: 768px) {
+            .server-meta {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .server-option {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-server"></i> Seleziona Server</h1>
+            <p>Scegli il server Discord di cui vuoi visualizzare i transcript</p>
+            
+            <div class="user-info">
+                <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                     class="user-avatar" alt="Avatar">
+                <span>${req.user.username}</span>
+            </div>
+        </div>
+
+        <div class="server-selection">
+            ${serverOptions}
+        </div>
+
+        <div class="footer">
+            <a href="/" class="btn">
+                <i class="fas fa-arrow-left"></i> Torna alla Home
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function selectServer(guildId) {
+            window.location.href = '/transcripts/' + guildId;
+        }
+    </script>
+</body>
+</html>
+        `);
+    } catch (error) {
+        console.error('❌ Errore nella selezione server:', error);
+        res.status(500).send('Errore interno del server');
+    }
+});
+
+// === ROTTA TRANSCRIPT PER SERVER SPECIFICO ===
+app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
+    try {
+        const guildId = req.params.guildId;
+        const userGuilds = req.user.guilds || [];
+        
+        // Verifica che l'utente abbia accesso a questo server specifico
+        const userGuild = userGuilds.find(g => g.id === guildId);
+        if (!userGuild) {
+            return res.status(403).send('Accesso negato a questo server');
+        }
+
+        // Verifica i permessi per questo server specifico
+        const result = await db.query(
+            'SELECT settings FROM guild_settings WHERE guild_id = $1',
+            [guildId]
+        );
+
+        let hasAccess = false;
+        if (result.rows.length > 0) {
+            const settings = result.rows[0].settings || {};
+            const allowedRoles = settings.allowed_roles || [];
+            const userRoles = userGuild.roles || [];
+            const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
+            const isAdmin = (userGuild.permissions & 0x8) === 0x8;
+            hasAccess = hasAllowedRole || isAdmin;
+        } else {
+            // Se non ci sono impostazioni, solo admin può accedere
+            hasAccess = (userGuild.permissions & 0x8) === 0x8;
+        }
+
+        if (!hasAccess) {
+            return res.status(403).send('Accesso negato a questo server');
+        }
+
+        // Leggi i transcript per questo server specifico
+        const transcriptDir = path.join(__dirname, 'transcripts');
+        let list = '';
+
+        if (fs.existsSync(transcriptDir)) {
+            const files = fs.readdirSync(transcriptDir)
+                .filter(f => f.endsWith('.html') && f !== '.gitkeep')
+                .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+
+            list = files.length > 0 ? `
+                <div class="transcript-header">
+                    <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
+                    <div class="transcript-stats">
+                        <span class="stat"><i class="fas fa-folder"></i> ${files.length} transcript totali</span>
+                        <span class="user-info">
+                            <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                                 class="user-avatar" alt="Avatar">
+                            ${req.user.username}
+                        </span>
+                    </div>
+                </div>
+                <div class="transcript-list">
+                    ${files.map(file => {
+                        const name = file.replace('.html', '');
+                        const stats = fs.statSync(path.join(transcriptDir, file));
+                        const date = new Date(stats.mtime).toLocaleString('it-IT');
+                        const size = (stats.size / 1024).toFixed(2);
+                        
+                        return `
+                        <div class="transcript-item">
+                            <div class="transcript-info">
+                                <div class="transcript-name">
+                                    <i class="fas fa-ticket-alt"></i>
+                                    <a href="/transcript/${name}" target="_blank">#${name}</a>
+                                </div>
+                                <div class="transcript-meta">
+                                    <span><i class="far fa-clock"></i> ${date}</span>
+                                    <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
+                                </div>
+                            </div>
+                            <div class="transcript-actions">
+                                <a href="/transcript/${name}" target="_blank" class="btn-view">
+                                    <i class="fas fa-eye"></i> Visualizza
+                                </a>
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            ` : `
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>Nessun transcript trovato</h3>
+                    <p>Non ci sono ancora transcript archiviati per questo server.</p>
+                </div>
+            `;
+        } else {
+            list = '<div class="error-state">Cartella transcript non trovata.</div>';
+        }
+
+        res.send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript - ${userGuild.name}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
@@ -780,6 +985,33 @@ app.get('/transcripts', checkStaffRole, (req, res) => {
             margin-bottom: 30px;
             padding-bottom: 20px;
             border-bottom: 1px solid var(--border);
+        }
+
+        .server-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .server-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+        }
+
+        .server-info h2 {
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .server-info p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
         }
 
         .user-info {
@@ -912,6 +1144,21 @@ app.get('/transcripts', checkStaffRole, (req, res) => {
             background: var(--primary-dark);
         }
 
+        .btn-back {
+            background: var(--border);
+            color: var(--text-primary);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-back:hover {
+            background: var(--primary);
+        }
+
         .btn-logout {
             background: var(--error);
             color: white;
@@ -972,18 +1219,131 @@ app.get('/transcripts', checkStaffRole, (req, res) => {
                 </a>
             </div>
         </div>
+
+        <div class="server-header">
+            ${userGuild.icon ? `<img src="https://cdn.discordapp.com/icons/${userGuild.id}/${userGuild.icon}.png" class="server-icon" alt="${userGuild.name}">` : '<div class="server-icon" style="background: var(--primary); display: flex; align-items: center; justify-content: center; color: white;"><i class="fas fa-server"></i></div>'}
+            <div class="server-info">
+                <h2>${userGuild.name}</h2>
+                <p>ID: ${userGuild.id}</p>
+            </div>
+        </div>
         
         ${list}
         
-        <div style="text-align: center; margin-top: 40px;">
-            <a href="/" style="color: var(--primary); text-decoration: none;">
-                <i class="fas fa-arrow-left"></i> Torna alla Home
+        <div style="text-align: center; margin-top: 40px; display: flex; gap: 15px; justify-content: center;">
+            <a href="/transcripts" class="btn-back">
+                <i class="fas fa-arrow-left"></i> Cambia Server
+            </a>
+            <a href="/" class="btn-back">
+                <i class="fas fa-home"></i> Torna alla Home
             </a>
         </div>
     </div>
 </body>
 </html>
-    `);
+        `);
+    } catch (error) {
+        console.error('❌ Errore nel caricamento transcript server:', error);
+        res.status(500).send('Errore interno del server');
+    }
+});
+
+// === ROTTA DEBUG PER VERIFICARE I PERMESSI ===
+app.get('/debug-permissions', async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.redirect('/auth/discord');
+    }
+
+    try {
+        const userInfo = {
+            username: req.user.username,
+            id: req.user.id,
+            guilds: []
+        };
+
+        // Per ogni guild, controlla le impostazioni dal database
+        for (const guild of req.user.guilds || []) {
+            const guildInfo = {
+                id: guild.id,
+                name: guild.name,
+                permissions: guild.permissions,
+                isAdmin: (guild.permissions & 0x8) === 0x8,
+                userRoles: guild.roles || [],
+                settings: null,
+                hasAccess: false
+            };
+
+            // Cerca le impostazioni del server
+            const result = await db.query(
+                'SELECT settings FROM guild_settings WHERE guild_id = $1',
+                [guild.id]
+            );
+
+            if (result.rows.length > 0) {
+                const settings = result.rows[0].settings || {};
+                guildInfo.settings = settings;
+                guildInfo.allowedRoles = settings.allowed_roles || [];
+                
+                // Controlla accesso
+                const hasAllowedRole = guildInfo.userRoles.some(roleId => 
+                    guildInfo.allowedRoles.includes(roleId)
+                );
+                guildInfo.hasAccess = hasAllowedRole || guildInfo.isAdmin;
+            } else {
+                guildInfo.settings = 'Nessuna impostazione trovata';
+                guildInfo.allowedRoles = [];
+                guildInfo.hasAccess = guildInfo.isAdmin; // Solo admin se nessuna impostazione
+            }
+
+            userInfo.guilds.push(guildInfo);
+        }
+
+        // Crea una pagina HTML leggibile
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Debug Permessi</title>
+                <style>
+                    body { background: #1e1f23; color: white; font-family: sans-serif; padding: 20px; }
+                    .guild { background: #2f3136; margin: 10px 0; padding: 15px; border-radius: 8px; }
+                    .has-access { border-left: 5px solid #00ff88; }
+                    .no-access { border-left: 5px solid #ed4245; }
+                    .role { display: inline-block; background: #5865F2; padding: 2px 8px; border-radius: 4px; margin: 2px; font-size: 0.9em; }
+                    .allowed-role { background: #00ff88; color: black; }
+                </style>
+            </head>
+            <body>
+                <h1>🔍 Debug Permessi - ${userInfo.username}</h1>
+                
+                ${userInfo.guilds.map(guild => `
+                    <div class="guild ${guild.hasAccess ? 'has-access' : 'no-access'}">
+                        <h3>${guild.name} ${guild.hasAccess ? '✅' : '❌'}</h3>
+                        <p><strong>ID:</strong> ${guild.id}</p>
+                        <p><strong>Admin:</strong> ${guild.isAdmin ? '✅' : '❌'}</p>
+                        
+                        <p><strong>Ruoli utente:</strong><br>
+                        ${guild.userRoles.map(roleId => `<span class="role">${roleId}</span>`).join('') || 'Nessun ruolo'}</p>
+                        
+                        <p><strong>Ruoli consentiti:</strong><br>
+                        ${guild.allowedRoles ? guild.allowedRoles.map(roleId => 
+                            `<span class="role allowed-role ${guild.userRoles.includes(roleId) ? 'user-has-role' : ''}">${roleId}</span>`
+                        ).join('') : 'Nessun ruolo consentito'}</p>
+                        
+                        <p><strong>Accesso transcript:</strong> ${guild.hasAccess ? '✅ CONSENTITO' : '❌ NEGATO'}</p>
+                    </div>
+                `).join('')}
+                
+                <br>
+                <a href="/" style="color: #5865F2;">← Torna alla Home</a>
+            </body>
+            </html>
+        `);
+
+    } catch (error) {
+        console.error('Errore debug:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // === HOMEPAGE MODERNA ===
@@ -1390,8 +1750,6 @@ try {
 } catch (error) {
     console.error('❌ Errore avvio server web:', error);
 }
-
-// ... (il resto del codice per Discord bot, comandi, eventi, database rimane uguale)
 
 // Collezioni comandi e cooldown
 client.commands = new Collection();
