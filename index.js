@@ -1197,8 +1197,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
             console.log(`🎯 File filtrati per server ${guildId}:`, serverFiles.length);
 
-            if (serverFiles.length > 0) {
-                list = `
+            list = serverFiles.length > 0 ? `
                 <div class="transcript-header">
                     <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
                     <div class="transcript-stats">
@@ -1254,9 +1253,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                         </div>`;
                     }).join('')}
                 </div>
-            `;
-            } else {
-                list = `
+            ` : `
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
                     <h3>Nessun transcript trovato per questo server</h3>
@@ -1298,7 +1295,6 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                     </div>
                 </div>
             `;
-            }
         } else {
             list = `
                 <div class="empty-state">
@@ -1312,8 +1308,8 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             `;
         }
 
-        // HTML finale - VERSIONE SICURA
-        const html = `<!DOCTYPE html>
+        res.send(`
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -1656,8 +1652,10 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
     <script>
         function copyTranscriptLink(transcriptId) {
+        
             const link = window.location.origin + '/transcript/' + transcriptId;
             navigator.clipboard.writeText(link).then(() => {
+                // Mostra feedback
                 const btn = event.target.closest('.btn-copy');
                 const originalHTML = btn.innerHTML;
                 btn.innerHTML = '<i class="fas fa-check"></i>';
@@ -1670,30 +1668,36 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             });
         }
 
-        async function deleteTranscript(transcriptName, event) {
-            if (!confirm('Sei sicuro di voler eliminare questo transcript?\\n\\n⚠️ Questa azione è irreversibile!')) {
+        /**
+         * Elimina un transcript
+         */
+        async function deleteTranscript(transcriptName, event) {  // ✅ AGGIUNGI event come parametro
+            if (!confirm('Sei sicuro di voler eliminare questo transcript?\n\n⚠️ Questa azione è irreversibile!')) {
                 return;
             }
-
+        
             try {
-                const response = await fetch('/transcript/' + encodeURIComponent(transcriptName), {
+                const response = await fetch(`/transcript/${transcriptName}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json'
                     }
                 });
-
+        
                 const result = await response.json();
-
+        
                 if (result.success) {
+                    // Mostra notifica successo
                     showNotification('✅ Transcript eliminato con successo!', 'success');
                     
+                    // Rimuovi l'elemento dalla lista
                     const transcriptItem = event.target.closest('.transcript-item');
                     if (transcriptItem) {
                         transcriptItem.style.opacity = '0';
                         transcriptItem.style.transform = 'translateX(-100px)';
                         setTimeout(() => {
                             transcriptItem.remove();
+                            // Aggiorna contatore
                             updateTranscriptCount();
                         }, 300);
                     }
@@ -1705,57 +1709,35 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 showNotification('❌ Errore di connessione', 'error');
             }
         }
-
+            
+        
+        /**
+         * Mostra notifica
+         */
         function showNotification(message, type = 'info') {
-            const notification = document.createElement('div');
-            notification.style.cssText = \`
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 15px 20px;
-                border-radius: 8px;
-                color: white;
-                z-index: 10000;
-                font-weight: 600;
-                font-family: 'Inter', sans-serif;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                transition: all 0.3s ease;
-                \${type === 'success' ? 'background: #00ff88; color: #000;' : ''}
-                \${type === 'error' ? 'background: #ed4245;' : ''}
-                \${type === 'info' ? 'background: #5865F2;' : ''}
-            \`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.transform = 'translateX(0)';
-            }, 10);
-            
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                notification.style.transform = 'translateX(100px)';
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.parentNode.removeChild(notification);
-                    }
-                }, 300);
-            }, 5000);
+            // ... codice notifiche che hai già ...
         }
         
+        /**
+         * Aggiorna contatore transcript
+         */
         function updateTranscriptCount() {
             const items = document.querySelectorAll('.transcript-item');
             const countElement = document.querySelector('.transcript-stats .stat:first-child');
             if (countElement) {
+                const countText = countElement.textContent;
                 const newCount = items.length;
-                countElement.innerHTML = '<i class="fas fa-folder"></i> ' + newCount + ' transcript trovati';
+                countElement.innerHTML = `<i class="fas fa-folder"></i> ${newCount} transcript trovati`;
             }
         }
+        
     </script>
 </body>
-</html>`;
+</html>
 
-        res.send(html);
 
+
+        `);
     } catch (error) {
         console.error('❌ Errore nel caricamento transcript server:', error);
         res.status(500).send('Errore interno del server');
