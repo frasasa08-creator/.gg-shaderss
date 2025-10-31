@@ -1,4 +1,4 @@
-// index.js
+ // index.js
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');
@@ -205,7 +205,7 @@ app.get('/', (req, res) => {
     <!-- PULSANTE INVITA -->
     <a href="${INVITE_LINK}" target="_blank" class="invite-btn">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a13.83 13.83 0 0 0 1.226-1.963a.074.074 0 0 0-.041-.105a13.2 13.2 0 0 1-1.872-.878a.075.075 0 0 1-.008-.125a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.075.075 0 0 1-.006.125a12.3 12.3 0 0 1-1.873.878a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.963a.077.077 0 0 0 .084.028a19.9 19.9 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.057c.49-5.38-.2-9.89-3.45-13.66a.07.07 0 0 0-.032-.027z"/></svg>
-      Invita il Bot
+      Bot Invite
     </a>
 
     <div class="header">
