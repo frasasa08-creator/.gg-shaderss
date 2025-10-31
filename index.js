@@ -228,7 +228,7 @@ app.get('/', (req, res) => {
 
       <!-- WIDGET CARD -->
       <div class="card">
-        <h3>Server Live</h3>
+        <h3>.gg/shaderss server live</h3>
         <div class="widget-container">
           <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" 
                   width="100%" height="400" allowtransparency="true" frameborder="0" 
