@@ -57,6 +57,77 @@ app.get('/transcript/:identifier', (req, res) => {
     `);
 });
 
+// === PROTEZIONE STAFF PER /transcripts ===
+app.get('/transcripts', async (req, res) => {
+    const auth = req.headers.authorization;
+    if (!auth || auth !== `Bearer ${process.env.STAFF_TOKEN}`) {
+        return res.status(403).send(`
+<!DOCTYPE html>
+<html><head><title>Accesso Negato</title>
+<style>body{background:#1e1f23;color:#fff;font-family:sans-serif;text-align:center;padding:100px;}
+h1{color:#ed4245;}</style></head>
+<body><h1>Accesso Negato</h1>
+<p>Solo lo staff può vedere questa pagina.</p>
+</body></html>
+        `);
+    }
+
+    // === LISTA TRANSCRIPT (PROTETTA) ===
+    const transcriptDir = path.join(__dirname, 'transcripts');
+    let list = '';
+
+    if (fs.existsSync(transcriptDir)) {
+        const files = fs.readdirSync(transcriptDir)
+            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
+            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+
+        list = files.length > 0 ? `
+            <h2>Transcript Archiviati (${files.length})</h2>
+            <ul>
+                ${files.map(file => {
+                    const name = file.replace('.html', '');
+                    const date = new Date(fs.statSync(path.join(transcriptDir, file)).mtime).toLocaleString('it-IT');
+                    return `<li><a href="/transcript/${name}" target="_blank">#${name}</a> <small>${date}</small></li>`;
+                }).join('')}
+            </ul>
+        ` : '<p>Nessun transcript trovato.</p>';
+    } else {
+        list = '<p>Cartella non trovata.</p>';
+    }
+
+    res.send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript - Staff Only</title>
+    <style>
+        body { margin:0; background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; padding:40px; }
+        .container { max-width:800px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; }
+        h1 { color:#5865F2; text-align:center; }
+        ul { list-style:none; padding:0; }
+        li { padding:12px; background:#2f3136; margin:8px 0; border-radius:8px; }
+        a { color:#00b0f4; text-decoration:none; font-weight:600; }
+        a:hover { text-decoration:underline; }
+        small { float:right; color:#72767d; }
+        .back { text-align:center; margin-top:30px; }
+        .back a { color:#5865F2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Transcript (Staff)</h1>
+        ${list}
+        <div class="back">
+            <a href="/">← Home</a>
+        </div>
+    </div>
+</body>
+</html>
+    `);
+});
+
 // LISTA COMPLETA TRANSCRIPT
 app.get('/transcripts', (req, res) => {
     const transcriptDir = path.join(__dirname, 'transcripts');
@@ -131,35 +202,8 @@ app.get('/health', (req, res) => {
     }
 });
 
-// HOMEPAGE CON PULSANTE TRANSCRIPT
+// HOMEPAGE CON PULSANTE GRIGIO "Tutti i Transcript"
 app.get('/', (req, res) => {
-    const transcriptDir = path.join(__dirname, 'transcripts');
-    let transcriptList = '';
-
-    if (fs.existsSync(transcriptDir)) {
-        const files = fs.readdirSync(transcriptDir)
-            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
-            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime)
-            .slice(0, 10); // ultimi 10
-
-        if (files.length > 0) {
-            transcriptList = `
-            <div class="transcripts">
-                <h2>Ultimi Transcript</h2>
-                <ul>
-                    ${files.map(file => {
-                        const name = file.replace('.html', '');
-                        const date = new Date(fs.statSync(path.join(transcriptDir, file)).mtime).toLocaleString('it-IT');
-                        return `<li><a href="/transcript/${name}" target="_blank">#${name}</a> <small>${date}</small></li>`;
-                    }).join('')}
-                </ul>
-                <p><a href="/transcripts" class="btn">Vedi tutti i transcript</a></p>
-            </div>`;
-        } else {
-            transcriptList = `<p>Nessun transcript disponibile al momento.</p>`;
-        }
-    }
-
     res.send(`
 <!DOCTYPE html>
 <html lang="it">
@@ -167,54 +211,80 @@ app.get('/', (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>.gg/shaderss • Status</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body { margin:0; background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; text-align:center; padding:40px; }
-        .container { max-width:600px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
-        h1 { font-size:2.5em; margin:0; color:#5865F2; }
-        .tagline { color:#b9bbbe; font-size:1.1em; margin:10px 0; }
-        .status { margin:30px 0; padding:20px; background:#2f3136; border-radius:12px; }
-        .status p { margin:8px 0; font-family:monospace; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; padding:30px; }
+        .container { max-width:900px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
+        header { text-align:center; margin-bottom:30px; }
+        h1 { font-size:2.8em; color:#5865F2; }
+        .tagline { color:#b9bbbe; font-size:1.1em; }
+        .main { display:flex; gap:30px; flex-wrap:wrap; }
+        .status-card, .live-card { flex:1; min-width:300px; background:#2f3136; border-radius:12px; padding:20px; }
+        .status-card h2 { color:#00ff88; margin-bottom:15px; font-size:1.4em; }
+        .info { display:flex; justify-content:space-between; margin:10px 0; font-family:monospace; }
         .loading { color:#00ff88; animation:pulse 1.5s infinite; }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
         .btn { 
-            display:inline-block; background:#5865F2; color:white; padding:12px 24px; 
-            border-radius:8px; text-decoration:none; font-weight:600; margin-top:15px; 
+            display:inline-block; background:#5865F2; color:white; padding:10px 20px; 
+            border-radius:8px; text-decoration:none; font-weight:600; margin:5px; 
             transition:0.3s; 
         }
-        .btn:hover { background:#4752c4; transform:translateY(-2px); }
-        .transcripts { margin-top:40px; text-align:left; background:#2f3136; padding:20px; border-radius:12px; }
-        .transcripts h2 { margin-top:0; color:#00ff88; }
-        .transcripts ul { list-style:none; padding:0; }
-        .transcripts li { padding:8px 0; border-bottom:1px solid #40444b; }
-        .transcripts li:last-child { border:none; }
-        .transcripts a { color:#00b0f4; text-decoration:none; }
-        .transcripts a:hover { text-decoration:underline; }
-        .transcripts small { color:#72767d; float:right; }
-        footer { margin-top:50px; color:#72767d; font-size:0.9em; }
+        .btn:hover { background:#4752c4; }
+        .btn-gray { background:#4f545c; }
+        .btn-gray:hover { background:#5f636b; }
+        .live-card h3 { color:#5865F2; margin-bottom:15px; text-align:center; }
+        .members { max-height:300px; overflow-y:auto; }
+        .member { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #40444b; }
+        .member img { width:32px; height:32px; border-radius:50%; }
+        .member span { flex:1; }
+        .member small { color:#72767d; }
+        footer { text-align:center; margin-top:40px; color:#72767d; font-size:0.9em; }
+        .transcript-btn { text-align:center; margin-top:30px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>.gg/shaderss</h1>
-        <p class="tagline">Discord Bot • 24/7</p>
+        <header>
+            <h1>.gg/shaderss</h1>
+            <p class="tagline">Discord Bot • 24/7</p>
+            <a href="https://discord.com/oauth2/authorize?client_id=TUO_CLIENT_ID&scope=bot&permissions=8" class="btn">
+                Bot Invite
+            </a>
+        </header>
 
-        <div class="status">
-            <p><i class="fas fa-circle loading"></i> <strong>Caricamento...</strong></p>
-            <p>Tag: <span id="tags">-</span> | Server: <span id="guilds">-</span> | Ping: <span id="ping">-</span>ms | Uptime: <span id="uptime">-</span></p>
+        <div class="main">
+            <div class="status-card">
+                <h2>Bot Status</h2>
+                <p><i class="fas fa-circle loading"></i> <strong>Caricamento...</strong></p>
+                <div class="info"><span>Tag:</span> <span id="tag">-</span></div>
+                <div class="info"><span>Server:</span> <span id="guilds">-</span></div>
+                <div class="info"><span>Ping:</span> <span id="ping">-</span>ms</div>
+                <div class="info"><span>Uptime:</span> <span id="uptime">-</span></div>
+            </div>
+
+            <div class="live-card">
+                <h3>.gg/shaderss server live</h3>
+                <div class="members" id="members">
+                    <p>Caricamento membri...</p>
+                </div>
+                <div style="text-align:center; margin-top:15px;">
+                    <a href="https://discord.gg/shaderss" class="btn" target="_blank">Join Discord</a>
+                </div>
+            </div>
         </div>
 
-        <a href="https://discord.com/oauth2/authorize?client_id=TUO_CLIENT_ID&scope=bot&permissions=8" class="btn">
-            <i class="fab fa-discord"></i> Invita il Bot
-        </a>
-
-        ${transcriptList}
-
+        <!-- PULSANTE GRIGIO SEMPRE VISIBILE -->
+        <div class="transcript-btn">
+            <a href="/transcripts" class="btn btn-gray">
+                Tutti i Transcript
+            </a>
+        </div>
     </div>
 
     <footer>
-        <p>Bot by <strong>Shaderss</strong> • <a href="/api/status">API Status</a></p>
+        <p>Powered by <strong>sasa111</strong></p>
     </footer>
 
     <script>
@@ -222,15 +292,15 @@ app.get('/', (req, res) => {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
-                document.getElementById('tags').textContent = data.tags || '-';
-                document.getElementById('guilds').textContent = data.guilds || '-';
-                document.getElementById('ping').textContent = data.ping || '-';
-                document.getElementById('uptime').textContent = data.uptime || '-';
+                document.getElementById('tag').textContent = data.bot.tag.split('#')[0];
+                document.getElementById('guilds').textContent = data.bot.guilds;
+                document.getElementById('ping').textContent = data.bot.ping;
+                document.getElementById('uptime').textContent = data.bot.uptime;
                 document.querySelector('.loading').style.color = '#00ff88';
-                document.querySelector('.loading').textContent = 'Online';
+                document.querySelector('.loading').textContent = 'ONLINE';
             } catch(e) {
                 document.querySelector('.loading').style.color = '#ed4245';
-                document.querySelector('.loading').textContent = 'Offline';
+                document.querySelector('.loading').textContent = 'OFFLINE';
             }
         }
         updateStatus();
@@ -240,7 +310,6 @@ app.get('/', (req, res) => {
 </html>
     `);
 });
-
 // Avvia server web con error handling
 let server;
 try {
