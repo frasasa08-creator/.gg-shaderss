@@ -552,72 +552,100 @@ async function initDatabase() {
 let isDeploying = false;
 
 async function deployCommands() {
-  // Skip se già fatto o disabilitato
+  // Skip se disabilitato o già in corso
   if (process.env.REGISTER_COMMANDS !== 'true' || isDeploying) {
-    console.log('Deploy comandi SKIPPATO (già fatto o in corso)');
+    console.log('⏭️ Deploy comandi SKIPPATO (REGISTER_COMMANDS=false o in corso)');
     return;
   }
 
   isDeploying = true;
-  console.log('Inizio registrazione comandi per i 2 server...');
+  console.log('🚀 Inizio deploy comandi nei 2 server...');
 
-  // Carica comandi
+  // === CARICA COMANDI ===
   const commands = [];
   const commandsPath = path.join(__dirname, 'commands');
   const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
 
   for (const file of commandFiles) {
     try {
+      delete require.cache[require.resolve(`./commands/${file}`)]; // Forza ricaricamento
       const command = require(`./commands/${file}`);
       if (command.data?.name) {
         commands.push(command.data.toJSON());
       }
     } catch (err) {
-      console.error(`Errore caricamento comando ${file}:`, err.message);
+      console.error(`❌ Errore caricamento comando ${file}:`, err.message);
     }
   }
 
   if (commands.length === 0) {
-    console.log('Nessun comando da registrare.');
+    console.log('⚠️ Nessun comando da registrare.');
     isDeploying = false;
     return;
   }
+
+  console.log(`📦 ${commands.length} comandi caricati: ${commands.map(c => c.name).join(', ')}`);
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  // Lista dei tuoi 2 server (da .env o hardcoded)
+  // === OTTIENI GUILD IDs ===
   const guildIds = [
-    process.env.GUILD_ID_1,  // Server 1
-    process.env.GUILD_ID_2   // Server 2
-  ].filter(id => id); // rimuovi null/undefined
+    process.env.GUILD_ID_1,
+    process.env.GUILD_ID_2
+  ].filter(id => id && id.trim() !== '');
 
   if (guildIds.length === 0) {
-    console.log('Nessun GUILD_ID configurato!');
+    console.log('❌ Nessun GUILD_ID configurato in .env!');
     isDeploying = false;
     return;
   }
 
-  // Registra per ogni server
+  // === REGISTRA PER OGNI SERVER ===
   for (const guildId of guildIds) {
+    console.log(`\n🔄 Registrazione comandi in server: ${guildId}`);
+
     try {
-      console.log(`Registrazione comandi in ${guildId}...`);
-      await rest.put(
+      const data = await rest.put(
         Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
         { body: commands }
       );
-      console.log(`Comandi registrati in ${guildId}`);
+
+      console.log(`✅ ${data.length} comandi registrati con successo in ${guildId}`);
     } catch (error) {
+      console.error(`\n❌ FALLITO DEPLOY in server ${guildId}`);
+
+      if (error.code) {
+        console.error(`   → Codice errore: ${error.code}`);
+        if (error.code === 50001) {
+          console.error(`   → Il bot NON ha i permessi 'Use Application Commands' o 'Manage Guild'`);
+          console.error(`   → Reinvita il bot con: applications.commands + Administrator`);
+        }
+        if (error.code === 50013) {
+          console.error(`   → Il bot NON ha permessi sufficienti (es. non è admin)`);
+        }
+      }
+
+      console.error(`   → Messaggio: ${error.message}`);
+      if (error.status) console.error(`   → HTTP Status: ${error.status}`);
+
+      // Gestione rate limit
       if (error.code === 429) {
         const wait = (error.retry_after || 10) * 1000;
-        console.log(`Rate limit! Aspetto ${wait/1000}s...`);
+        console.log(`⏳ Rate limit! Aspetto ${wait / 1000}s prima di riprovare...`);
         await new Promise(r => setTimeout(r, wait));
-        // Riprova una volta
-        await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: commands });
-      } else {
-        console.error(`Errore in ${guildId}:`, error.message);
+        try {
+          await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: commands });
+          console.log(`✅ Retry riuscito in ${guildId}`);
+        } catch (retryError) {
+          console.error(`❌ Anche il retry è fallito in ${guildId}`);
+        }
       }
     }
   }
+
+  console.log('\n🎉 Deploy completato per tutti i server!');
+  isDeploying = false;
+}
 
   console.log('Tutti i comandi registrati nei 2 server!');
   isDeploying = false;
