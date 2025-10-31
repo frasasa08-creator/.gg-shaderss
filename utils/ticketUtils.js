@@ -216,18 +216,27 @@ async function closeTicketWithReason(interaction) {
             fs.mkdirSync(transcriptDir, { recursive: true });
         }
 
-        // NOME UNIVOCO: nome-canale + ID ticket + timestamp + SERVER ID
-        const ticketIdPart = ticket.id.toString().padStart(4, '0');
-        const timestamp = Date.now().toString().slice(-6); // ultimi 6 cifre
-        const guildId = interaction.guild.id; // ID del server
+        // Recupera il tipo di ticket dal database
+        const ticketType = ticket.ticket_type.toLowerCase().replace(/\s+/g, '-');
+        const username = user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const timestamp = Date.now().toString().slice(-8); // ultimi 8 cifre
+        const guildId = interaction.guild.id;
+
+        // FORMATO STANDARD: ticket-{tipo}-{username}-{timestamp}-{serverId}.html
+        const uniqueName = `ticket-${ticketType}-${username}-${timestamp}-${guildId}`;
+        const transcriptPath = path.join(transcriptDir, `${uniqueName}.html`);
         
-        // FORMATO: ticket-support-username-123456-123456789012345678.html
-        const uniqueName = `ticket-${selectedOption.name.toLowerCase()}-${user.username.toLowerCase()}-${timestamp}-${guildId}`;
+        // Salva il file
+        fs.writeFileSync(transcriptPath, transcript.attachment);
+        const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${uniqueName}`;
 
         // === INVIO DM CON LINK ===
         let ticketCreator = null;
-        try { ticketCreator = await interaction.client.users.fetch(ticket.user_id); }
-        catch { console.log('Utente non trovato:', ticket.user_id); }
+        try { 
+            ticketCreator = await interaction.client.users.fetch(ticket.user_id); 
+        } catch { 
+            console.log('Utente non trovato:', ticket.user_id); 
+        }
 
         if (ticketCreator) {
             try {
@@ -335,7 +344,7 @@ async function closeTicketWithReason(interaction) {
         setTimeout(() => {
             if (fs.existsSync(transcriptPath)) {
                 fs.unlinkSync(transcriptPath);
-                console.log(`Transcript ${cleanChannelName} eliminato (7 giorni)`);
+                console.log(`Transcript ${uniqueName} eliminato (7 giorni)`);
             }
         }, 7 * 24 * 60 * 60 * 1000);
 
