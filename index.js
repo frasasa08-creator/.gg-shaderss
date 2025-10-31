@@ -21,7 +21,7 @@ const client = new Client({
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT; // ⬅️ RIMOSSO || 3000
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
@@ -88,13 +88,34 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// Health check per Render
+// Health check migliorato
 app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'OK', 
-        bot: client?.user?.tag || 'Offline',
-        uptime: process.uptime() 
+    if (client && client.isReady()) {
+        res.status(200).json({ 
+            status: 'ok', 
+            bot: 'online',
+            timestamp: new Date().toISOString()
+        });
+    } else {
+        res.status(503).json({ 
+            status: 'error', 
+            bot: 'offline',
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Root endpoint per Render
+app.get('/', (req, res) => {
+    res.status(200).json({
+        status: 'Bot is running',
+        bot: client?.isReady() ? 'online' : 'starting',
+        timestamp: new Date().toISOString()
     });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server health check in ascolto sulla porta ${PORT}`);
 });
 
 // Pagina principale con AUTO-REFRESH
