@@ -29,30 +29,38 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configurazione session con opzioni specifiche per Render
+// Trust proxy per Render
+app.set('trust proxy', 1);
+
+// Session middleware CONFIGURAZIONE CORRETTA per Render
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-    resave: true, // Cambiato a true per Render
-    saveUninitialized: true, // Cambiato a true
+    secret: process.env.SESSION_SECRET || 'fallback-insecure-secret-change-this',
+    resave: true, // IMPORTANTE: true per Render
+    saveUninitialized: true, // IMPORTANTE: true per Render
     cookie: { 
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000,
+        secure: true, // FORZA HTTPS - Render usa sempre HTTPS
+        maxAge: 24 * 60 * 60 * 1000, // 24 ore
         httpOnly: true,
-        sameSite: 'lax'
+        sameSite: 'lax',
+        domain: '.onrender.com' // DOMINIO SPECIFICO
     },
-    name: 'gg-shaderss.sid' // Nome specifico per il cookie
+    name: 'ggshaderss.sid',
+    // Aggiungi store di sessione più robusto
+    store: new session.MemoryStore(),
+    // Forza il salvataggio della sessione
+    rolling: true
 }));
 
 // Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
 
-// DEBUG: Log delle variabili d'ambiente
-console.log('🔧 DEBUG Variabili OAuth:');
-console.log('CLIENT_ID:', process.env.CLIENT_ID ? 'Presente' : 'Mancante');
-console.log('DISCORD_CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? 'Presente' : 'Mancante');
-console.log('RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL || 'Non impostato');
-console.log('NODE_ENV:', process.env.NODE_ENV || 'Non impostato');
+// DEBUG: Verifica configurazione
+console.log('🔧 DEBUG Configurazione Session:');
+console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Presente' : 'MISSING!');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('Cookie secure:', true);
+console.log('Trust proxy:', 1);
 
 // Configurazione Passport con URL dinamico
 const getCallbackURL = () => {
