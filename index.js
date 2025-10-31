@@ -549,7 +549,6 @@ async function initDatabase() {
     }
 }
 
-const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -645,7 +644,7 @@ client.on('error', (error) => {
 });
 
 // Avvio bot
-client.once('clientReady', async () => {
+client.once('ready', async () => {
     console.log(`✅ Bot online come ${client.user.tag}`);
     console.log(`🏠 Server: ${client.guilds.cache.size} server`);
     console.log(`👥 Utenti: ${client.users.cache.size} utenti`);
