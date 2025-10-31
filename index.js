@@ -44,20 +44,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Configurazione Passport
-passport.use(new DiscordStrategy({
-    clientID: process.env.CLIENT_ID,
-    clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.CALLBACK_URL || `http://localhost:${PORT}/auth/discord/callback`,
-    scope: ['identify', 'guilds']
-}, async (accessToken, refreshToken, profile, done) => {
-    try {
-        return done(null, profile);
-    } catch (error) {
-        return done(error, null);
-    }
-}));
-
 passport.serializeUser((user, done) => {
     done(null, user);
 });
@@ -65,6 +51,34 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser((user, done) => {
     done(null, user);
 });
+
+
+// Configurazione Passport con URL dinamico
+const getCallbackURL = () => {
+    if (process.env.RENDER_EXTERNAL_URL) {
+        return `${process.env.RENDER_EXTERNAL_URL}/auth/discord/callback`;
+    }
+    if (process.env.CALLBACK_URL) {
+        return process.env.CALLBACK_URL;
+    }
+    return `http://localhost:${PORT}/auth/discord/callback`;
+};
+
+passport.use(new DiscordStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.DISCORD_CLIENT_SECRET,
+    callbackURL: getCallbackURL(),
+    scope: ['identify', 'guilds']
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        console.log('🔑 Utente autenticato:', profile.username);
+        console.log('🌐 Callback URL utilizzato:', getCallbackURL());
+        return done(null, profile);
+    } catch (error) {
+        console.error('❌ Errore autenticazione:', error);
+        return done(error, null);
+    }
+}));
 
 // === MIDDLEWARE DI AUTENTICAZIONE GLOBALE ===
 function requireAuth(req, res, next) {
