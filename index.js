@@ -1710,6 +1710,43 @@ app.delete('/transcript/:filename', checkStaffRole, async (req, res) => {
     }
 });
 
+// === ROTTA DEBUG PER VERIFICARE I FILE ===
+app.get('/debug-transcripts-files', (req, res) => {
+    const transcriptDir = path.join(__dirname, 'transcripts');
+    
+    if (!fs.existsSync(transcriptDir)) {
+        return res.json({ 
+            success: false, 
+            message: 'Cartella transcripts non esiste',
+            path: transcriptDir 
+        });
+    }
+    
+    const allFiles = fs.readdirSync(transcriptDir)
+        .filter(f => f.endsWith('.html') && f !== '.gitkeep');
+    
+    const fileDetails = allFiles.map(file => {
+        const filePath = path.join(transcriptDir, file);
+        const stats = fs.statSync(filePath);
+        
+        return {
+            name: file,
+            nameWithoutExt: file.replace('.html', ''),
+            size: stats.size,
+            created: stats.birthtime,
+            modified: stats.mtime
+        };
+    });
+    
+    res.json({
+        success: true,
+        transcriptDir: transcriptDir,
+        totalFiles: allFiles.length,
+        files: fileDetails,
+        allFileNames: allFiles
+    });
+});
+
 // === ROTTA DEBUG PER VERIFICARE I PERMESSI ===
 app.get('/debug-permissions', async (req, res) => {
     if (!req.isAuthenticated()) {
