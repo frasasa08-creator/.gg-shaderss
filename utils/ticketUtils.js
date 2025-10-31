@@ -8,7 +8,8 @@ const {
     StringSelectMenuBuilder,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    cleanupOldTranscripts
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +23,40 @@ try {
     db = {
         query: async () => ({ rows: [] }),
     };
+}
+
+/**
+ * Pulizia automatica transcript dopo 7 giorni
+ */
+async function cleanupOldTranscripts(days = 7) {
+    const transcriptDir = path.join(__dirname, '..', 'transcripts');
+    if (!fs.existsSync(transcriptDir)) return;
+
+    const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
+    let deletedCount = 0;
+
+    try {
+        const files = fs.readdirSync(transcriptDir);
+        
+        for (const file of files) {
+            if (!file.endsWith('.html') || file === '.gitkeep') continue;
+            
+            const filePath = path.join(transcriptDir, file);
+            const stats = fs.statSync(filePath);
+            
+            if (stats.mtimeMs < cutoffTime) {
+                fs.unlinkSync(filePath);
+                deletedCount++;
+                console.log(`🗑️ Transcript eliminato (auto): ${file}`);
+            }
+        }
+
+        if (deletedCount > 0) {
+            console.log(`✅ Pulizia completata: ${deletedCount} transcript eliminati`);
+        }
+    } catch (error) {
+        console.error('❌ Errore pulizia automatica transcript:', error);
+    }
 }
 
 /**
