@@ -78,6 +78,9 @@ app.get('/api/status', (req, res) => {
                 status: '🟢 ONLINE',
                 uptime: process.uptime(),
                 timestamp: new Date().toISOString()
+                ping: client.ws.ping,
+                guilds: client.guilds.cache.size,
+                tags: 'ticket, support, advanced'
             }
         });
     }
@@ -112,6 +115,63 @@ app.get('/transcript/:identifier', (req, res) => {
     <h1>Transcript non trovato</h1>
     <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
     <p>Torna tra 7 giorni? No, è già andato.</p>
+</body>
+</html>
+    `);
+});
+
+// LISTA COMPLETA TRANSCRIPT
+app.get('/transcripts', (req, res) => {
+    const transcriptDir = path.join(__dirname, 'transcripts');
+    let list = '';
+
+    if (fs.existsSync(transcriptDir)) {
+        const files = fs.readdirSync(transcriptDir)
+            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
+            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+
+        list = files.length > 0 ? `
+            <h2>Tutti i Transcript (${files.length})</h2>
+            <ul>
+                ${files.map(file => {
+                    const name = file.replace('.html', '');
+                    const date = new Date(fs.statSync(path.join(transcriptDir, file)).mtime).toLocaleString('it-IT');
+                    return `<li><a href="/transcript/${name}" target="_blank">#${name}</a> <small>${date}</small></li>`;
+                }).join('')}
+            </ul>
+        ` : '<p>Nessun transcript trovato.</p>';
+    } else {
+        list = '<p>Cartella transcript non trovata.</p>';
+    }
+
+    res.send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tutti i Transcript</title>
+    <style>
+        body { margin:0; background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; padding:40px; }
+        .container { max-width:800px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; }
+        h1 { color:#5865F2; text-align:center; }
+        ul { list-style:none; padding:0; }
+        li { padding:12px; background:#2f3136; margin:8px 0; border-radius:8px; }
+        a { color:#00b0f4; text-decoration:none; font-weight:600; }
+        a:hover { text-decoration:underline; }
+        small { float:right; color:#72767d; }
+        .back { text-align:center; margin-top:30px; }
+        .back a { color:#5865F2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Transcript Archiviati</h1>
+        ${list}
+        <div class="back">
+            <a href="/">← Torna alla home</a>
+        </div>
+    </div>
 </body>
 </html>
     `);
