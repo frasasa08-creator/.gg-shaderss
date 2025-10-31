@@ -1,11 +1,24 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ChannelType,
+    PermissionFlagsBits,
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
+} = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 // Import del database
 let db;
 try {
     db = require('../db');
 } catch (error) {
-    console.error('❌ Errore nel caricamento del database:', error.message);
+    console.error('Errore nel caricamento del database:', error.message);
     db = {
         query: async () => ({ rows: [] }),
     };
@@ -17,24 +30,21 @@ try {
 async function createTicket(interaction, optionValue) {
     try {
         await interaction.deferReply({ flags: 64 });
-
         const guild = interaction.guild;
         const user = interaction.user;
 
         // PRIMA: Pulizia ticket orfani
-        console.log(`🧹 Verifica ticket orfani per ${user.id}...`);
+        console.log(`Verifica ticket orfani per ${user.id}...`);
         const openTickets = await db.query(
             'SELECT * FROM tickets WHERE guild_id = $1 AND user_id = $2 AND status = $3',
             [guild.id, user.id, 'open']
         );
-
         let hasValidOpenTicket = false;
         let validOpenTicket = null;
-
         for (const ticket of openTickets.rows) {
             const channelExists = guild.channels.cache.get(ticket.channel_id);
             if (!channelExists) {
-                console.log(`🧹 Pulizia ticket orfano: ${ticket.id}`);
+                console.log(`Pulizia ticket orfano: ${ticket.id}`);
                 await db.query(
                     'UPDATE tickets SET status = $1, closed_at = NOW(), close_reason = $2 WHERE id = $3',
                     ['closed', 'Pulizia automatica: canale eliminato', ticket.id]
@@ -42,72 +52,55 @@ async function createTicket(interaction, optionValue) {
             } else {
                 hasValidOpenTicket = true;
                 validOpenTicket = ticket;
-                console.log(`✅ Ticket aperto valido trovato: ${ticket.id}`);
+                console.log(`Ticket aperto valido trovato: ${ticket.id}`);
             }
         }
 
-        // Se c'è un ticket aperto valido, blocca la creazione
         if (hasValidOpenTicket && validOpenTicket) {
             const existingChannel = guild.channels.cache.get(validOpenTicket.channel_id);
             return await interaction.editReply({
-                content: `❌ Hai già un ticket aperto! ${existingChannel ? existingChannel.toString() : 'Chiudi quello attuale prima di aprirne uno nuovo.'}`
+                content: `Hai già un ticket aperto! ${existingChannel ? existingChannel.toString() : 'Chiudi quello attuale prima di aprirne uno nuovo.'}`
             });
         }
 
-        // Recupera le opzioni ticket dal database
+        // Recupera le opzioni ticket
         const settingsResult = await db.query(
             'SELECT settings FROM guild_settings WHERE guild_id = $1',
             [guild.id]
         );
-
         if (!settingsResult.rows.length || !settingsResult.rows[0].settings?.ticket_options) {
-            return await interaction.editReply({
-                content: '❌ Configurazione ticket non trovata!'
-            });
+            return await interaction.editReply({ content: 'Configurazione ticket non trovata!' });
         }
-
         const ticketOptions = settingsResult.rows[0].settings.ticket_options;
         const selectedOption = ticketOptions.find(opt => opt.value === optionValue);
-
         if (!selectedOption) {
-            return await interaction.editReply({
-                content: '❌ Opzione ticket non valida!'
-            });
+            return await interaction.editReply({ content: 'Opzione ticket non valida!' });
         }
 
-        // Trova o crea la categoria
-        let category = guild.channels.cache.find(ch => 
-            ch.type === ChannelType.GuildCategory && 
+        // Trova o crea categoria
+        let category = guild.channels.cache.find(ch =>
+            ch.type === ChannelType.GuildCategory &&
             ch.name.toLowerCase() === selectedOption.category.toLowerCase()
         );
-
         if (!category) {
             category = await guild.channels.create({
                 name: selectedOption.category,
                 type: ChannelType.GuildCategory,
                 permissionOverwrites: [
-                    {
-                        id: guild.roles.everyone,
-                        deny: [PermissionFlagsBits.ViewChannel],
-                    }
+                    { id: guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel] }
                 ]
             });
         }
 
-        // Crea il canale ticket
+        // Crea canale
         const ticketChannelName = `${selectedOption.name.toLowerCase().replace(/\s+/g, '-')}-${user.username.toLowerCase()}`;
-        
         const ticketChannel = await guild.channels.create({
             name: ticketChannelName,
             type: ChannelType.GuildText,
             parent: category
         });
 
-        // Sincronizza i permessi con la categoria
         await ticketChannel.lockPermissions();
-        console.log(`✅ Permessi sincronizzati con la categoria: ${category.name}`);
-
-        // Aggiungi permessi per l'utente
         await ticketChannel.permissionOverwrites.edit(user.id, {
             ViewChannel: true,
             SendMessages: true,
@@ -115,32 +108,28 @@ async function createTicket(interaction, optionValue) {
             AttachFiles: true,
             EmbedLinks: true
         });
-        console.log(`✅ Permessi aggiunti per l'utente: ${user.tag}`);
 
-        // Salva il ticket nel database
+        // Salva nel DB con channel_name
         const ticketResult = await db.query(
-            'INSERT INTO tickets (guild_id, user_id, channel_id, ticket_type, status) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-            [guild.id, user.id, ticketChannel.id, selectedOption.name, 'open']
+            'INSERT INTO tickets (guild_id, user_id, channel_id, ticket_type, status, channel_name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+            [guild.id, user.id, ticketChannel.id, selectedOption.name, 'open', ticketChannel.name]
         );
-
         const ticketId = ticketResult.rows[0].id;
 
-        // Crea l'embed di benvenuto del ticket
+        // Embed benvenuto
         const welcomeEmbed = new EmbedBuilder()
-            .setTitle(`🎟 Ticket: ${selectedOption.name}`)
+            .setTitle(`Ticket: ${selectedOption.name}`)
             .setDescription(`Ciao ${user.toString()}!\n\nGrazie per aver aperto un ticket. Un membro dello staff ti risponderà il prima possibile.\n\n**Tipo:** ${selectedOption.name}\n**Categoria:** ${selectedOption.category}`)
             .setColor(0x0099ff)
             .setTimestamp()
             .setFooter({ text: `Ticket ID: ${ticketId}` });
 
-        // Bottone per chiudere il ticket
-        const closeButton = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('close_ticket')
-                    .setLabel('🔒 Chiudi Ticket')
-                    .setStyle(ButtonStyle.Danger)
-            );
+        const closeButton = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('close_ticket')
+                .setLabel('Chiudi Ticket')
+                .setStyle(ButtonStyle.Danger)
+        );
 
         await ticketChannel.send({
             content: `${user.toString()} - ${selectedOption.emoji ?? ''}`,
@@ -148,97 +137,62 @@ async function createTicket(interaction, optionValue) {
             components: [closeButton]
         });
 
-        await interaction.editReply({
-            content: `✅ Ticket creato! ${ticketChannel.toString()}`
-        });
+        await interaction.editReply({ content: `Ticket creato! ${ticketChannel.toString()}` });
 
-        // Reset del menu select
+        // Reset menu
         try {
             const originalMessage = interaction.message;
-            if (originalMessage && originalMessage.components && originalMessage.components.length > 0) {
-                const actionRow = originalMessage.components[0];
-                if (actionRow && actionRow.components && actionRow.components.length > 0) {
-                    const selectMenu = actionRow.components[0];
-                    
-                    const newSelectMenu = new StringSelectMenuBuilder()
-                        .setCustomId(selectMenu.customId || 'ticket_select')
-                        .setPlaceholder('🎟 Scegli una opzione...');
-                    
-                    if (selectMenu.options) {
-                        newSelectMenu.addOptions(selectMenu.options);
-                    }
-                    
-                    const newActionRow = new ActionRowBuilder().addComponents(newSelectMenu);
-                    
-                    await originalMessage.edit({
-                        embeds: originalMessage.embeds || [],
-                        components: [newActionRow]
-                    });
-                    console.log('✅ Menu select resettato con successo');
-                }
+            if (originalMessage?.components?.length > 0) {
+                const selectMenu = originalMessage.components[0].components[0];
+                const newSelectMenu = new StringSelectMenuBuilder()
+                    .setCustomId(selectMenu.customId || 'ticket_select')
+                    .setPlaceholder('Scegli una opzione...')
+                    .addOptions(selectMenu.options || []);
+                await originalMessage.edit({
+                    embeds: originalMessage.embeds || [],
+                    components: [new ActionRowBuilder().addComponents(newSelectMenu)]
+                });
             }
-        } catch (menuError) {
-            console.log('⚠️ Impossibile resettare il menu select:', menuError.message);
-        }
+        } catch (e) { console.log('Impossibile resettare menu:', e.message); }
 
     } catch (error) {
         console.error('Errore creazione ticket:', error);
-        try {
-            await interaction.editReply({
-                content: `❌ Errore durante la creazione del ticket: ${error.message}`
-            });
-        } catch (editError) {
-            console.log('⚠️ Impossibile rispondere');
-        }
+        try { await interaction.editReply({ content: `Errore: ${error.message}` }); }
+        catch { console.log('Impossibile rispondere'); }
     }
 }
 
 /**
- * Mostra il modal per la motivazione di chiusura
+ * Mostra modal chiusura
  */
 async function showCloseTicketModal(interaction) {
     try {
-        // Crea il modal
         const modal = new ModalBuilder()
             .setCustomId('close_ticket_modal')
             .setTitle('Chiudi Ticket');
-
-        // Aggiungi il campo per la motivazione
         const reasonInput = new TextInputBuilder()
             .setCustomId('close_reason')
             .setLabel('Motivazione della chiusura')
-            .setPlaceholder('Inserisci la motivazione per chiudere questo ticket...')
+            .setPlaceholder('Inserisci la motivazione...')
             .setStyle(TextInputStyle.Paragraph)
             .setMinLength(5)
             .setMaxLength(500)
             .setRequired(true);
-
-        const actionRow = new ActionRowBuilder().addComponents(reasonInput);
-        modal.addComponents(actionRow);
-
-        // Mostra il modal
+        modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
         await interaction.showModal(modal);
-        
     } catch (error) {
-        console.error('Errore mostrare modal chiusura:', error);
-        try {
-            await interaction.reply({
-                content: '❌ Errore durante l\'apertura del form di chiusura.',
-                flags: 64
-            });
-        } catch (replyError) {
-            console.log('⚠️ Impossibile rispondere');
-        }
+        console.error('Errore modal:', error);
+        try { await interaction.reply({ content: 'Errore form chiusura.', flags: 64 }); }
+        catch { console.log('Impossibile rispondere'); }
     }
 }
 
 /**
- * Chiude un ticket con motivazione
+ * Chiude ticket con transcript online (nome canale)
  */
 async function closeTicketWithReason(interaction) {
     try {
         await interaction.deferReply({ flags: 64 });
-
         const reason = interaction.fields.getTextInputValue('close_reason');
         const channel = interaction.channel;
         const user = interaction.user;
@@ -247,213 +201,155 @@ async function closeTicketWithReason(interaction) {
             'SELECT * FROM tickets WHERE channel_id = $1 AND status = $2',
             [channel.id, 'open']
         );
-
         if (ticketResult.rows.length === 0) {
-            return await interaction.editReply({
-                content: '❌ Questo non è un canale ticket valido!'
-            });
+            return await interaction.editReply({ content: 'Questo non è un canale ticket valido!' });
         }
-
         const ticket = ticketResult.rows[0];
-        
-        console.log(`📝 Generazione transcript per ticket ${ticket.id}...`);
+
+        console.log(`Generazione transcript per ticket ${ticket.id}...`);
         const transcript = await generateOblivionBotTranscript(channel, ticket.id);
-        console.log(`✅ Transcript generato: ${transcript.name}`);
+        console.log(`Transcript generato.`);
 
-        // Salva il transcript temporaneamente e crea un URL pubblico
-        // Per ora usiamo un approccio con file allegati per il DM
-        const transcriptAttachment = transcript;
-
-        // Recupera informazioni sull'utente che ha aperto il ticket
-        let ticketCreator = null;
-        try {
-            ticketCreator = await interaction.client.users.fetch(ticket.user_id);
-        } catch (error) {
-            console.log('⚠️ Impossibile trovare l\'utente che ha aperto il ticket:', ticket.user_id);
+        // === SALVA TRANSCRIPT CON NOME CANALE ===
+        const transcriptDir = path.join(__dirname, '..', 'transcripts');
+        if (!fs.existsSync(transcriptDir)) {
+            fs.mkdirSync(transcriptDir, { recursive: true });
         }
 
-        // INVIO TRANSCRIPT IN DM ALL'UTENTE (con file allegato)
+        const cleanChannelName = channel.name.toLowerCase().replace(/[^a-z0-9\-]/g, '-');
+        const transcriptPath = path.join(transcriptDir, `${cleanChannelName}.html`);
+        fs.writeFileSync(transcriptPath, transcript.attachment);
+
+        const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${cleanChannelName}`;
+
+        // === INVIO DM CON LINK ===
+        let ticketCreator = null;
+        try { ticketCreator = await interaction.client.users.fetch(ticket.user_id); }
+        catch { console.log('Utente non trovato:', ticket.user_id); }
+
         if (ticketCreator) {
             try {
                 const dmEmbed = new EmbedBuilder()
-                    .setTitle('📋 Transcript del tuo Ticket')
-                    .setDescription(`Ecco il transcript del ticket che hai aperto su **${interaction.guild.name}**\n\n**Scarica il file qui sotto per visualizzare la conversazione completa.**`)
+                    .setTitle('Transcript del tuo Ticket')
+                    .setDescription(`Ecco il transcript del ticket su **${interaction.guild.name}**\n\n**[Visualizza online](${transcriptUrl})**`)
                     .addFields(
-                        { name: '🎟 Tipo Ticket', value: ticket.ticket_type, inline: true },
-                        { name: '📅 Aperto il', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
-                        { name: '🔒 Chiuso da', value: user.toString(), inline: true },
-                        { name: '📝 Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
-                        { name: '📁 Canale', value: `#${channel.name}`, inline: true }
+                        { name: 'Tipo', value: ticket.ticket_type, inline: true },
+                        { name: 'Aperto', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
+                        { name: 'Chiuso da', value: user.toString(), inline: true },
+                        { name: 'Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
+                        { name: 'Canale', value: `#${channel.name}`, inline: true }
                     )
                     .setColor(0x0099ff)
                     .setTimestamp()
-                    .setFooter({ text: `Ticket ID: ${ticket.id} • Apri il file HTML nel tuo browser` });
+                    .setFooter({ text: `Disponibile per 7 giorni` });
 
                 await ticketCreator.send({
-                    content: '📄 **Ecco il transcript del tuo ticket chiuso:**',
-                    embeds: [dmEmbed],
-                    files: [transcriptAttachment]
+                    content: '**Transcript chiuso:**',
+                    embeds: [dmEmbed]
                 });
-                console.log(`✅ Transcript inviato in DM a ${ticketCreator.tag}`);
             } catch (dmError) {
-                console.log(`❌ Impossibile inviare il transcript in DM a ${ticketCreator.tag}:`, dmError.message);
-                await channel.send({
-                    content: `⚠️ ${user.toString()}, non è stato possibile inviare il transcript in DM a <@${ticket.user_id}>. Potrebbero avere i DM chiusi.`
-                });
+                await channel.send({ content: `Non ho potuto inviare il link a <@${ticket.user_id}>. DM chiusi?` });
             }
         }
 
-        // EMBED DI CHIUSURA NEL CANALE TICKET
+        // === CHIUSURA NEL CANALE ===
         const closeEmbed = new EmbedBuilder()
-            .setTitle('🔒 Ticket Chiuso')
-            .setDescription(`Il ticket è stato chiuso da ${user.toString()}\n\nIl transcript è stato inviato in DM all'utente.`)
+            .setTitle('Ticket Chiuso')
+            .setDescription(`Chiuso da ${user.toString()}\nTranscript: [Visualizza online](${transcriptUrl})`)
             .addFields(
-                { name: '👤 Aperto da', value: `<@${ticket.user_id}>`, inline: true },
-                { name: '🎟 Tipo', value: ticket.ticket_type, inline: true },
-                { name: '🔒 Chiuso da', value: user.toString(), inline: true },
-                { name: '📝 Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
-                { name: '📅 Data apertura', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true }
+                { name: 'Aperto da', value: `<@${ticket.user_id}>`, inline: true },
+                { name: 'Tipo', value: ticket.ticket_type, inline: true },
+                { name: 'Chiuso da', value: user.toString(), inline: true },
+                { name: 'Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
+                { name: 'Data', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true }
             )
             .setColor(0xff0000)
-            .setTimestamp()
-            .setFooter({ text: `Ticket ID: ${ticket.id} • Transcript inviato in DM` });
+            .setTimestamp();
 
         await channel.send({ embeds: [closeEmbed] });
 
-        // LOG NEL CANALE DEI LOG (con file allegato)
-        const logChannelResult = await db.query(
-            'SELECT ticket_log_channel_id FROM guild_settings WHERE guild_id = $1',
-            [interaction.guild.id]
-        );
-
-        if (logChannelResult.rows.length > 0) {
-            const logChannel = interaction.guild.channels.cache.get(logChannelResult.rows[0].ticket_log_channel_id);
+        // === LOG CANALE ===
+        const logResult = await db.query('SELECT ticket_log_channel_id FROM guild_settings WHERE guild_id = $1', [interaction.guild.id]);
+        if (logResult.rows.length > 0) {
+            const logChannel = interaction.guild.channels.cache.get(logResult.rows[0].ticket_log_channel_id);
             if (logChannel) {
                 const logEmbed = new EmbedBuilder()
-                    .setTitle('📋 Ticket Chiuso - Log')
+                    .setTitle('Ticket Chiuso - Log')
                     .addFields(
-                        { name: '👤 Utente', value: `<@${ticket.user_id}>`, inline: true },
-                        { name: '🎟 Tipo', value: ticket.ticket_type, inline: true },
-                        { name: '🔒 Chiuso da', value: user.toString(), inline: true },
-                        { name: '📝 Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
-                        { name: '📅 Aperto', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
-                        { name: '📅 Chiuso', value: `<t:${Math.floor(Date.now() / 1000)}:f>`, inline: true },
-                        { name: '📁 Canale', value: `#${channel.name}`, inline: true }
+                        { name: 'Utente', value: `<@${ticket.user_id}>`, inline: true },
+                        { name: 'Tipo', value: ticket.ticket_type, inline: true },
+                        { name: 'Chiuso da', value: user.toString(), inline: true },
+                        { name: 'Motivazione', value: reason.length > 100 ? reason.substring(0, 100) + '...' : reason, inline: true },
+                        { name: 'Aperto', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:f>`, inline: true },
+                        { name: 'Chiuso', value: `<t:${Math.floor(Date.now() / 1000)}:f>`, inline: true },
+                        { name: 'Canale', value: `#${channel.name}`, inline: true },
+                        { name: 'Transcript', value: `[Visualizza online](${transcriptUrl})`, inline: false }
                     )
                     .setColor(0xff0000)
                     .setTimestamp();
-
-                try {
-                    await logChannel.send({
-                        content: '📄 **Transcript del ticket:**',
-                        embeds: [logEmbed],
-                        files: [transcriptAttachment]
-                    });
-                } catch (logError) {
-                    console.error('Errore invio log:', logError);
-                }
+                await logChannel.send({ content: '**Transcript:**', embeds: [logEmbed] });
             }
         }
 
-        // AGGIORNA IL TICKET NEL DATABASE
+        // === AGGIORNA DB ===
         await db.query(
             'UPDATE tickets SET status = $1, closed_at = CURRENT_TIMESTAMP, close_reason = $2 WHERE id = $3',
             ['closed', reason, ticket.id]
         );
 
+        // === ELIMINA FILE DOPO 7 GIORNI ===
+        setTimeout(() => {
+            if (fs.existsSync(transcriptPath)) {
+                fs.unlinkSync(transcriptPath);
+                console.log(`Transcript ${cleanChannelName} eliminato (7 giorni)`);
+            }
+        }, 7 * 24 * 60 * 60 * 1000);
+
+        // === COUNTDOWN E CHIUSURA ===
         const countdownEmbed = new EmbedBuilder()
-            .setTitle('🔒 Ticket in Chiusura')
-            .setDescription('Il ticket si chiuderà in **5** secondi...')
+            .setTitle('Ticket in Chiusura')
+            .setDescription('Canale eliminato in **5** secondi...')
             .setColor(0xff0000);
-
-        // Countdown
-        try {
-            const message = await interaction.editReply({ embeds: [countdownEmbed] });
-
-            for (let i = 4; i >= 1; i--) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                countdownEmbed.setDescription(`Il ticket si chiuderà in **${i}** second${i !== 1 ? 'i' : 'o'}...`);
-                try {
-                    await message.edit({ embeds: [countdownEmbed] });
-                } catch (editError) {
-                    break;
-                }
-            }
-        } catch (error) {
-            // Ignora errori countdown
+        const msg = await interaction.editReply({ embeds: [countdownEmbed] });
+        for (let i = 4; i >= 1; i--) {
+            await new Promise(r => setTimeout(r, 1000));
+            countdownEmbed.setDescription(`Canale eliminato in **${i}** second${i > 1 ? 'i' : 'o'}...`);
+            try { await msg.edit({ embeds: [countdownEmbed] }); } catch {}
         }
-
-        // Eliminazione canale
         setTimeout(async () => {
-            try {
-                if (channel.deletable) {
-                    await channel.delete('Ticket chiuso');
-                    console.log(`✅ Canale ticket ${channel.id} eliminato con successo`);
-                }
-            } catch (deleteError) {
-                console.error('Errore eliminazione canale ticket:', deleteError);
-            }
+            if (channel.deletable) await channel.delete('Ticket chiuso');
         }, 1000);
 
     } catch (error) {
-        console.error('Errore chiusura ticket:', error);
-        try {
-            await interaction.editReply({
-                content: `❌ Errore durante la chiusura del ticket: ${error.message}`
-            });
-        } catch (editError) {
-            console.log('⚠️ Impossibile rispondere');
-        }
+        console.error('Errore chiusura:', error);
+        try { await interaction.editReply({ content: `Errore: ${error.message}` }); }
+        catch { console.log('Impossibile rispondere'); }
     }
 }
 
 /**
- * GENERA TRANSCRIPT IDENTICO A OBLIVION BOT
+ * GENERA TRANSCRIPT (stile Oblivion Bot)
  */
 async function generateOblivionBotTranscript(channel, ticketId) {
     try {
-        console.log(`📝 Generazione transcript Oblivion Bot style per ticket ${ticketId}...`);
-        
         const guild = channel.guild;
-        const ticketResult = await db.query(
-            'SELECT * FROM tickets WHERE id = $1',
-            [ticketId]
-        );
-        
-        if (ticketResult.rows.length === 0) {
-            throw new Error('Ticket non trovato nel database');
-        }
-        
-        const ticket = ticketResult.rows[0];
-        const ticketCreator = await channel.client.users.fetch(ticket.user_id).catch(() => null);
+        const ticketResult = await db.query('SELECT * FROM tickets WHERE id = $1', [ticketId]);
+        if (ticketResult.rows.length === 0) throw new Error('Ticket non trovato');
 
-        // HTML IDENTICO A OBLIVION BOT CON FAVICON DINAMICA
         const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
 <meta charSet="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <link rel="icon" type="image/png" href="${channel.client.user.displayAvatarURL({ extension: 'png', size: 64 })}"/>
-<title>${guild.name} - Oblivion Bot</title>
+<title>${guild.name} - Ticket #${channel.name}</title>
 <script>
 document.addEventListener("click",t=>{let e=t.target;if(!e)return;e.offsetParent?.classList.contains("context-menu")||contextMenu?.classList.remove("visible");let o=e?.getAttribute("data-goto");if(o){let n=document.getElementById(\`m-\${o}\`);n?(n.scrollIntoView({behavior:"smooth",block:"center"}),n.style.backgroundColor="rgba(148, 156, 247, 0.1)",n.style.transition="background-color 0.5s ease",setTimeout(()=>{n.style.backgroundColor="transparent"},1e3)):console.warn(\`Message \${o} not found.\`)}});
 </script>
 <link rel="stylesheet" href="https://cdn.johnbot.app/css/transcripts.css"/>
 <script src="https://cdn.johnbot.app/js/transcripts.js"></script>
 <script>
-window.$discordMessage = {
-    profiles: {
-        // Profilo base per il bot - sarà sovrascritto dinamicamente se necessario
-        "discord-tickets": {
-            author: "Oblivion Bot",
-            avatar: "${channel.client.user.displayAvatarURL({ extension: 'webp', size: 64 })}",
-            roleColor: "#5865F2",
-            roleName: "🤖┃BOT",
-            bot: true,
-            verified: true
-        }
-    }
-};
+window.$discordMessage = { profiles: { "discord-tickets": { author: "Oblivion Bot", avatar: "${channel.client.user.displayAvatarURL({ extension: 'webp', size: 64 })}", roleColor: "#5865F2", roleName: "BOT", bot: true, verified: true } } };
 </script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/@derockdev/discord-components-core@^3.6.1/dist/derockdev-discord-components-core/derockdev-discord-components-core.esm.js"></script>
 </head>
@@ -473,7 +369,7 @@ ${channel.name}
 <discord-messages style="min-height:100vh;padding:0 0 90px;background-color:#313338;border:none;border-top:1px solid rgba(255, 255, 255, 0.05)">
 ${await generateOblivionBotMessagesHTML(channel)}
 </discord-messages>
-<footer>This archive has been generated on the <time id="footer-timestamp">${new Date().toLocaleString('en-US')}</time></footer>
+<footer>Generato il <time id="footer-timestamp">${new Date().toLocaleString('it-IT')}</time></footer>
 <div id="context-menu" class="context-menu">
 <div class="item message">Copy Message ID</div>
 <div class="item user">Copy User ID</div>
@@ -491,55 +387,43 @@ c&&c.addEventListener("click",()=>{navigator.clipboard.writeText(i),contextMenu.
 
         return {
             attachment: Buffer.from(htmlContent, 'utf-8'),
-            name: `transcript-${ticketId}.html`
+            name: `${channel.name}.html`
         };
-
     } catch (error) {
-        console.error('Errore generazione transcript Oblivion Bot style:', error);
+        console.error('Errore generazione transcript:', error);
         return generateOblivionBotFallbackTranscript(channel, ticketId);
     }
 }
 
 /**
- * Converte il markdown di Discord in HTML
+ * Converte markdown in HTML
  */
 function convertMarkdownToHTML(text) {
     if (!text) return '';
-    
     return text
-        // Grassetto **testo**
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        // Corsivo *testo* o _testo_
         .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
         .replace(/_(.*?)_/g, '<em>$1</em>')
-        // Sottolineato __testo__
         .replace(/__(.*?)__/g, '<u>$1</u>')
-        // Barrato ~~testo~~
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        // Code inline `testo`
         .replace(/`(.*?)`/g, '<code>$1</code>')
-        // Code block ```testo```
         .replace(/```(\w+)?\n?(.*?)```/gs, '<pre><code>$2</code></pre>');
 }
 
 /**
- * Processa le mention nei testi
+ * Processa mention
  */
 function processMentions(text, guild) {
     if (!text) return '';
-    
     return text
-        // Mention utente <@123456789> -> @nomeutente
         .replace(/<@!?(\d+)>/g, (match, userId) => {
             const user = guild.client.users.cache.get(userId);
             return user ? `@${user.username}` : '@UtenteSconosciuto';
         })
-        // Mention ruolo <@&123456789> -> @nomeruolo
         .replace(/<@&(\d+)>/g, (match, roleId) => {
             const role = guild.roles.cache.get(roleId);
             return role ? `@${role.name}` : '@RuoloSconosciuto';
         })
-        // Mention canale <#123456789> -> #nomecanale
         .replace(/<#(\d+)>/g, (match, channelId) => {
             const channel = guild.channels.cache.get(channelId);
             return channel ? `#${channel.name}` : '#canalesconosciuto';
@@ -547,56 +431,44 @@ function processMentions(text, guild) {
 }
 
 /**
- * Genera i messaggi in formato Oblivion Bot
+ * Genera HTML dei messaggi
  */
 async function generateOblivionBotMessagesHTML(channel) {
     try {
         const messages = await channel.messages.fetch({ limit: 100 });
         const sortedMessages = Array.from(messages.values()).reverse();
         const guild = channel.guild;
-
         if (sortedMessages.length === 0) {
             return `<discord-message id="m-no-messages" timestamp="${new Date().toISOString()}" profile="discord-tickets">
     <discord-embed slot="embeds" color="#ffffff">
-        <discord-embed-description slot="description">No messages found in this ticket.</discord-embed-description>
+        <discord-embed-description slot="description">Nessun messaggio trovato in questo ticket.</discord-embed-description>
     </discord-embed>
 </discord-message>`;
         }
-
         let messagesHTML = '';
-        
+
         for (const message of sortedMessages) {
             const messageId = `m-${message.id}`;
             const isBot = message.author.bot;
             const timestamp = message.createdAt.toISOString();
-            
-            let messageContent = message.content || '';
-            
-            // PROCESS MENTIONS con nomi reali
-            messageContent = processMentions(messageContent, guild);
-            
-            // CONVERTI MARKDOWN A HTML
-            messageContent = convertMarkdownToHTML(messageContent);
 
-            // CONVERTI EMOJI PERSONALIZZATE IN IMMAGINI
-            messageContent = messageContent.replace(/<:(\w+):(\d+)>/g, 
+            let messageContent = message.content || '';
+
+            messageContent = processMentions(messageContent, guild);
+            messageContent = convertMarkdownToHTML(messageContent);
+            messageContent = messageContent.replace(/<:(\w+):(\d+)>/g,
                 '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
             );
-
-            // CONVERTI EMOJI ANIMATE IN GIF
-            messageContent = messageContent.replace(/<a:(\w+):(\d+)>/g, 
+            messageContent = messageContent.replace(/<a:(\w+):(\d+)>/g,
                 '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
             );
 
-            // CREA PROFILO DINAMICO PER OGNI MESSAGGIO
             const authorId = message.author.id;
             const authorName = message.author.username;
             const authorAvatar = message.author.displayAvatarURL({ extension: 'webp', size: 64 });
-            const isVerified = message.author.bot;
-            const roleColor = isVerified ? '#5865F2' : undefined;
-            const roleName = isVerified ? '🤖┃BOT' : undefined;
+            const roleColor = isBot ? '#5865F2' : undefined;
+            const roleName = isBot ? 'BOT' : undefined;
 
-            // Aggiungi il profilo dinamicamente allo script
             const profileScript = `
 <script>
 if (!window.$discordMessage.profiles["${authorId}"]) {
@@ -605,69 +477,45 @@ if (!window.$discordMessage.profiles["${authorId}"]) {
         avatar: "${authorAvatar}",
         ${roleColor ? `roleColor: "${roleColor}",` : ''}
         ${roleName ? `roleName: "${roleName}",` : ''}
-        bot: ${isVerified},
-        verified: ${isVerified}
+        bot: ${isBot},
+        verified: ${isBot}
     };
 }
 </script>`;
 
-            // Se è un messaggio normale
             if (message.content && !message.embeds.length && !message.components.length) {
                 messagesHTML += `${profileScript}
 <discord-message id="${messageId}" timestamp="${timestamp}" profile="${authorId}">
 ${messageContent}
 </discord-message>`;
             }
-            // Se ha embed (come il messaggio iniziale del bot)
             else if (message.embeds.length > 0) {
                 messagesHTML += `${profileScript}
 <discord-message id="${messageId}" timestamp="${timestamp}" profile="${authorId}">`;
-                
-                if (message.content) {
-                    messagesHTML += `${messageContent}`;
-                }
-                
+
+                if (message.content) messagesHTML += `${messageContent}`;
+
                 message.embeds.forEach(embed => {
                     const embedColor = embed.hexColor || '#0099ff';
-                    
-                    // Processa anche le emoji e markdown negli embed
                     let embedTitle = embed.title || '';
                     let embedDescription = embed.description || '';
                     let embedFooter = embed.footer?.text || '';
-                    
-                    // Process mentions e markdown per embed
+
                     embedTitle = processMentions(embedTitle, guild);
                     embedDescription = processMentions(embedDescription, guild);
                     embedFooter = processMentions(embedFooter, guild);
-                    
+
                     embedTitle = convertMarkdownToHTML(embedTitle);
                     embedDescription = convertMarkdownToHTML(embedDescription);
                     embedFooter = convertMarkdownToHTML(embedFooter);
-                    
-                    // Converti emoji nel titolo
-                    embedTitle = embedTitle.replace(/<:(\w+):(\d+)>/g, 
-                        '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
-                    );
-                    embedTitle = embedTitle.replace(/<a:(\w+):(\d+)>/g, 
-                        '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
-                    );
-                    
-                    // Converti emoji nella descrizione
-                    embedDescription = embedDescription.replace(/<:(\w+):(\d+)>/g, 
-                        '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
-                    );
-                    embedDescription = embedDescription.replace(/<a:(\w+):(\d+)>/g, 
-                        '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
-                    );
-                    
-                    // Converti emoji nel footer
-                    embedFooter = embedFooter.replace(/<:(\w+):(\d+)>/g, 
-                        '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin: 0 1px;" class="discord-custom-emoji">'
-                    );
-                    embedFooter = embedFooter.replace(/<a:(\w+):(\d+)>/g, 
-                        '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin: 0 1px;" class="discord-custom-emoji">'
-                    );
-                    
+
+                    embedTitle = embedTitle.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
+                    embedTitle = embedTitle.replace(/<a:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
+                    embedDescription = embedDescription.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
+                    embedDescription = embedDescription.replace(/<a:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
+                    embedFooter = embedFooter.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin: 0 1px;" class="discord-custom-emoji">');
+                    embedFooter = embedFooter.replace(/<a:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin: 0 1px;" class="discord-custom-emoji">');
+
                     messagesHTML += `
 <discord-embed slot="embeds" color="${embedColor}"${embed.image ? ` image="${embed.image.url}"` : ''}>
 ${embedTitle ? `<discord-embed-title slot="title">${embedTitle}</discord-embed-title>` : ''}
@@ -675,39 +523,30 @@ ${embedDescription ? `<discord-embed-description slot="description">${embedDescr
 ${embed.footer ? `<discord-embed-footer slot="footer"${embed.footer.iconURL ? ` footer-image="${embed.footer.iconURL}"` : ''}>${embedFooter}</discord-embed-footer>` : ''}
 </discord-embed>`;
                 });
-                
+
                 messagesHTML += `\n</discord-message>`;
             }
-            // Se ha componenti (bottoni)
             else if (message.components.length > 0) {
                 messagesHTML += `${profileScript}
 <discord-message id="${messageId}" timestamp="${timestamp}" profile="${authorId}">`;
-                
-                if (message.content) {
-                    messagesHTML += `${messageContent}`;
-                }
-                
+
+                if (message.content) messagesHTML += `${messageContent}`;
+
                 if (message.embeds.length > 0) {
                     message.embeds.forEach(embed => {
                         const embedColor = embed.hexColor || '#5865f2';
-                        
-                        // Processa emoji e markdown negli embed dei componenti
                         let embedTitle = embed.title || '';
                         let embedDescription = embed.description || '';
-                        
+
                         embedTitle = processMentions(embedTitle, guild);
                         embedDescription = processMentions(embedDescription, guild);
-                        
+
                         embedTitle = convertMarkdownToHTML(embedTitle);
                         embedDescription = convertMarkdownToHTML(embedDescription);
-                        
-                        embedTitle = embedTitle.replace(/<:(\w+):(\d+)>/g, 
-                            '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
-                        );
-                        embedDescription = embedDescription.replace(/<:(\w+):(\d+)>/g, 
-                            '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
-                        );
-                        
+
+                        embedTitle = embedTitle.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
+                        embedDescription = embedDescription.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
+
                         messagesHTML += `
 <discord-embed embed-title="${embedTitle || 'Ticket Control Panel'}" slot="embeds" color="${embedColor}">
 <discord-embed-description slot="description">${embedDescription || 'Choose an action to perform on the ticket'}</discord-embed-description>
@@ -715,54 +554,50 @@ ${embed.footer ? `<discord-embed-footer slot="footer"${embed.footer.iconURL ? ` 
 </discord-embed>`;
                     });
                 }
-                
+
                 messagesHTML += `
 <discord-attachments slot="components">`;
-                
+
                 message.components.forEach(componentRow => {
                     messagesHTML += `
 <discord-action-row>`;
-                    
+
                     componentRow.components.forEach(component => {
                         if (component.type === 'BUTTON') {
                             const buttonType = getOblivionBotButtonType(component.style);
-                            
-                            // Processa emoji nelle label dei bottoni
                             let buttonLabel = component.label || '';
-                            buttonLabel = buttonLabel.replace(/<:(\w+):(\d+)>/g, 
+                            buttonLabel = buttonLabel.replace(/<:(\w+):(\d+)>/g,
                                 '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;" class="discord-custom-emoji">'
                             );
-                            
+
                             messagesHTML += `
 <discord-button type="${buttonType}" emoji="${component.emoji?.url || 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f512.svg'}">${buttonLabel}</discord-button>`;
                         }
                     });
-                    
+
                     messagesHTML += `
 </discord-action-row>`;
                 });
-                
+
                 messagesHTML += `
 </discord-attachments>
 </discord-message>`;
             }
         }
-
         return messagesHTML;
-
     } catch (error) {
-        console.error('Errore generazione messaggi Oblivion Bot:', error);
+        console.error('Errore generazione messaggi:', error);
         return `
 <discord-message id="m-error" timestamp="${new Date().toISOString()}" profile="discord-tickets">
     <discord-embed slot="embeds" color="#ed4245">
-        <discord-embed-description slot="description">Error loading messages: ${error.message}</discord-embed-description>
+        <discord-embed-description slot="description">Errore caricamento messaggi: ${error.message}</discord-embed-description>
     </discord-embed>
 </discord-message>`;
     }
 }
 
 /**
- * Restituisce il tipo di bottone per Oblivion Bot
+ * Tipo bottone
  */
 function getOblivionBotButtonType(style) {
     switch (style) {
@@ -775,7 +610,7 @@ function getOblivionBotButtonType(style) {
 }
 
 /**
- * Transcript di fallback in stile Oblivion Bot
+ * Fallback transcript
  */
 function generateOblivionBotFallbackTranscript(channel, ticketId) {
     const fallbackHTML = `<!DOCTYPE html>
@@ -795,78 +630,51 @@ document.addEventListener("click",t=>{let e=t.target;if(!e)return;e.offsetParent
 <body style="margin:0;min-height:100vh">
 <div>
 <section>
-<span style="font-size:28px;color:#fff;font-weight:600">Error Generating Transcript</span>
-<span style="font-size:16px;color:#b9bbbe;font-weight:400">Failed to generate transcript for ticket #${ticketId}</span>
+<span style="font-size:28px;color:#fff;font-weight:600">Errore Generazione Transcript</span>
+<span style="font-size:16px;color:#b9bbbe;font-weight:400">Impossibile generare il transcript per il ticket #${ticketId}</span>
 </section>
 </div>
 <discord-messages style="min-height:100vh;padding:0 0 90px;background-color:#313338;border:none;border-top:1px solid rgba(255, 255, 255, 0.05)">
 <discord-message id="m-error" timestamp="${new Date().toISOString()}" profile="discord-tickets">
 <discord-embed slot="embeds" color="#ed4245">
-<discord-embed-description slot="description">An error occurred while generating the transcript for this ticket.</discord-embed-description>
+<discord-embed-description slot="description">Si è verificato un errore durante la generazione del transcript.</discord-embed-description>
 </discord-embed>
 </discord-message>
 </discord-messages>
-<footer>This archive has been generated on the <time>${new Date().toLocaleString('en-US')}</time></footer>
+<footer>Generato il <time>${new Date().toLocaleString('it-IT')}</time></footer>
 </body>
 </html>`;
-
     return {
         attachment: Buffer.from(fallbackHTML, 'utf-8'),
-        name: `transcript-${ticketId}.html`
+        name: `transcript-error-${ticketId}.html`
     };
 }
 
 /**
- * Formatta la dimensione del file
- */
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-/**
- * Chiude forzatamente un ticket
+ * Forza chiusura
  */
 async function forceCloseTicket(guildId, userId, reason = "Forzatura amministrativa") {
     try {
-        console.log(`🔍 Force closing ticket per guild: ${guildId}, user: ${userId}`);
-
         const anyTicket = await db.query(
             'SELECT id, status FROM tickets WHERE guild_id = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT 1',
             [guildId, userId]
         );
-
-        if (anyTicket.rows.length === 0) {
-            return { success: false, message: "Nessun ticket trovato per questo utente" };
-        }
-
+        if (anyTicket.rows.length === 0) return { success: false, message: "Nessun ticket trovato" };
         const ticket = anyTicket.rows[0];
-        
-        if (ticket.status === 'closed') {
-            return { success: true, message: "Ticket già chiuso" };
-        }
-
-        if (ticket.status === 'open') {
-            await db.query(
-                'UPDATE tickets SET status = $1, closed_at = NOW(), close_reason = $2 WHERE id = $3',
-                ['closed', reason, ticket.id]
-            );
-            return { success: true, message: "Ticket chiuso con successo" };
-        }
-
-        return { success: false, message: "Stato del ticket non riconosciuto" };
-
+        if (ticket.status === 'closed') return { success: true, message: "Già chiuso" };
+        await db.query(
+            'UPDATE tickets SET status = $1, closed_at = NOW(), close_reason = $2 WHERE id = $3',
+            ['closed', reason, ticket.id]
+        );
+        return { success: true, message: "Chiuso con successo" };
     } catch (error) {
-        console.error("❌ Errore durante la forzatura chiusura ticket:", error);
-        return { success: false, message: "Errore durante la chiusura del ticket" };
+        console.error("Errore forzatura:", error);
+        return { success: false, message: "Errore" };
     }
 }
 
 /**
- * Salva messaggi ticket
+ * Salva messaggio
  */
 async function saveTicketMessage(message) {
     try {
@@ -874,21 +682,17 @@ async function saveTicketMessage(message) {
             'SELECT id FROM tickets WHERE channel_id = $1 AND status = $2',
             [message.channel.id, 'open']
         );
-
         if (ticketResult.rows.length > 0) {
-            const ticketId = ticketResult.rows[0].id;
-
             await db.query(
                 'INSERT INTO ticket_messages (ticket_id, user_id, username, content) VALUES ($1, $2, $3, $4)',
-                [ticketId, message.author.id, message.author.username, message.content || '[Contenuto non testuale]']
+                [ticketResult.rows[0].id, message.author.id, message.author.username, message.content || '[Media]']
             );
         }
     } catch (error) {
-        console.error('Errore salvataggio messaggio ticket:', error);
+        console.error('Errore salvataggio:', error);
     }
 }
 
-// MANTIENI LA FUNZIONE ORIGINALE PER COMPATIBILITÀ
 async function generateTranscript(channel, ticketId) {
     return await generateOblivionBotTranscript(channel, ticketId);
 }
