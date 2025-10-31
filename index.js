@@ -350,6 +350,19 @@ app.get('/transcript/:identifier', (req, res) => {
     const transcriptDir = path.join(__dirname, 'transcripts');
     
     console.log(`🔍 Ricerca transcript: ${identifier}`);
+    console.log(`📁 Cartella transcript: ${transcriptDir}`);
+    
+    // Crea la cartella se non esiste
+    if (!fs.existsSync(transcriptDir)) {
+        console.log('📁 Creo cartella transcripts...');
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        
+        // Crea un file .gitkeep per mantenere la cartella
+        const gitkeepPath = path.join(transcriptDir, '.gitkeep');
+        if (!fs.existsSync(gitkeepPath)) {
+            fs.writeFileSync(gitkeepPath, '');
+        }
+    }
     
     // Cerca il file esatto
     const exactPath = path.join(transcriptDir, `${identifier}.html`);
@@ -360,12 +373,125 @@ app.get('/transcript/:identifier', (req, res) => {
         return res.sendFile(exactPath);
     }
     
-    // Se non trova il file esatto, cerca file che contengono l'identifier
+    // Se non trova il file, mostra tutti i file disponibili per debug
     try {
         const allFiles = fs.readdirSync(transcriptDir)
             .filter(f => f.endsWith('.html') && f !== '.gitkeep');
         
-        console.log(`📁 File disponibili:`, allFiles);
+        console.log(`📁 File disponibili nella cartella:`, allFiles);
+        
+        // Crea un transcript di test se non ci sono file
+        if (allFiles.length === 0) {
+            console.log('🛠️ Creo transcript di test...');
+            const testTranscript = `
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript di Test - ${identifier}</title>
+    <style>
+        body { 
+            background: #36393f; 
+            color: #ffffff; 
+            font-family: 'Segoe UI', sans-serif; 
+            padding: 20px; 
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header { 
+            background: #2f3136; 
+            padding: 25px; 
+            border-radius: 10px; 
+            margin-bottom: 20px; 
+            border-left: 5px solid #5865F2;
+        }
+        .message { 
+            background: #40444b; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 10px 0; 
+            border-left: 3px solid #5865F2;
+        }
+        .user-message { 
+            background: #2f3136; 
+            margin-left: 50px;
+        }
+        .staff-message { 
+            background: #4f545c; 
+            margin-right: 50px;
+        }
+        .timestamp {
+            color: #72767d;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        .debug-info {
+            background: #2f3136;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 30px;
+            border: 1px solid #5865F2;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎫 Transcript di Test</h1>
+        <p><strong>Ticket ID:</strong> ${identifier}</p>
+        <p><strong>Data:</strong> ${new Date().toLocaleString('it-IT')}</p>
+        <p>Questo è un transcript di prova generato automaticamente dal sistema.</p>
+    </div>
+    
+    <div class="message user-message">
+        <strong>👤 User123:</strong> Ciao, ho bisogno di aiuto con il prodotto!
+        <div class="timestamp">${new Date(Date.now() - 3600000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message staff-message">
+        <strong>🛡️ Staff Member:</strong> Ciao! Sono qui per aiutarti. Qual è il problema?
+        <div class="timestamp">${new Date(Date.now() - 3000000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message user-message">
+        <strong>👤 User123:</strong> Non riesco ad accedere al mio account.
+        <div class="timestamp">${new Date(Date.now() - 2400000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message staff-message">
+        <strong>🛡️ Staff Member:</strong> Prova a resettare la password dal link "Password dimenticata".
+        <div class="timestamp">${new Date(Date.now() - 1800000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message user-message">
+        <strong>👤 User123:</strong> Funziona! Grazie mille per l'aiuto!
+        <div class="timestamp">${new Date(Date.now() - 600000).toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="message staff-message">
+        <strong>🛡️ Staff Member:</strong> Di nulla! Buona giornata! 🎉
+        <div class="timestamp">${new Date().toLocaleString('it-IT')}</div>
+    </div>
+    
+    <div class="debug-info">
+        <h3>🔧 Informazioni di Debug</h3>
+        <p><strong>Ticket Identifier:</strong> ${identifier}</p>
+        <p><strong>Cartella Transcripts:</strong> ${transcriptDir}</p>
+        <p><strong>File Creato:</strong> ${identifier}.html</p>
+        <p><strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}</p>
+        <p><strong>Data Generazione:</strong> ${new Date().toLocaleString('it-IT')}</p>
+        <p><em>Questo transcript è stato generato automaticamente per testare il sistema.</em></p>
+    </div>
+</body>
+</html>`;
+            
+            const testFilePath = path.join(transcriptDir, `${identifier}.html`);
+            fs.writeFileSync(testFilePath, testTranscript);
+            console.log(`✅ Transcript di test creato: ${identifier}.html`);
+            
+            res.setHeader('Content-Type', 'text/html');
+            return res.send(testTranscript);
+        }
         
         // Cerca file che contengono l'identifier nel nome
         const matchingFiles = allFiles.filter(file => {
@@ -386,6 +512,22 @@ app.get('/transcript/:identifier', (req, res) => {
         console.error('Errore ricerca transcript:', error);
     }
 
+    // Mostra pagina di errore con più dettagli
+    let folderInfo = 'Cartella non esistente';
+    let fileCount = 0;
+    let allFilesList = [];
+    
+    try {
+        if (fs.existsSync(transcriptDir)) {
+            folderInfo = 'Cartella esistente';
+            const files = fs.readdirSync(transcriptDir);
+            fileCount = files.filter(f => f.endsWith('.html')).length;
+            allFilesList = files.filter(f => f.endsWith('.html'));
+        }
+    } catch (e) {
+        folderInfo = `Errore accesso: ${e.message}`;
+    }
+
     res.status(404).send(`
 <!DOCTYPE html>
 <html lang="it">
@@ -394,25 +536,88 @@ app.get('/transcript/:identifier', (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transcript non trovato</title>
     <style>
-        body { background: #1e1f23; color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; }
+        body { 
+            background: #1e1f23; 
+            color: #fff; 
+            font-family: 'Segoe UI', sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+        }
         h1 { color: #ed4245; }
         p { font-size: 1.2em; }
         .discord { color: #5865F2; }
-        .debug { background: #2f3136; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: left; font-family: monospace; }
+        .debug { 
+            background: #2f3136; 
+            padding: 20px; 
+            border-radius: 8px; 
+            margin: 20px 0; 
+            text-align: left; 
+            font-family: monospace;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .file-list {
+            background: #36393f;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: left;
+        }
+        .btn {
+            display: inline-block;
+            background: #5865F2;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin: 10px;
+            transition: background 0.3s;
+            font-weight: 600;
+        }
+        .btn:hover {
+            background: #4752c4;
+            transform: translateY(-2px);
+        }
+        .btn-test {
+            background: #00ff88;
+            color: #000;
+        }
+        .btn-test:hover {
+            background: #00cc6a;
+        }
     </style>
 </head>
 <body>
-    <h1>Transcript non trovato</h1>
+    <h1>📄 Transcript non trovato</h1>
     <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
     
     <div class="debug">
-        <strong>Debug Info:</strong><br>
-        Identifier cercato: ${identifier}<br>
-        Cartella transcripts: ${transcriptDir}<br>
-        File .html nella cartella: ${fs.existsSync(transcriptDir) ? fs.readdirSync(transcriptDir).filter(f => f.endsWith('.html')).length : 'Cartella non esistente'}
+        <strong>🔧 Informazioni di Debug:</strong><br><br>
+        <strong>Identifier cercato:</strong> ${identifier}<br>
+        <strong>Cartella transcripts:</strong> ${transcriptDir}<br>
+        <strong>Stato cartella:</strong> ${folderInfo}<br>
+        <strong>File .html trovati:</strong> ${fileCount}<br>
+        <strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}<br>
+        <strong>Tempo:</strong> ${new Date().toLocaleString('it-IT')}<br><br>
+        
+        <strong>📁 File disponibili:</strong>
+        <div class="file-list">
+            ${allFilesList.length > 0 ? allFilesList.map(file => `• ${file}`).join('<br>') : 'Nessun file transcript trovato'}
+        </div>
     </div>
-    
-    <a href="/transcripts" style="color: #5865F2; text-decoration: none;">← Torna alla lista transcript</a>
+
+    <div style="margin-top: 30px;">
+        <a href="/transcript/${identifier}" class="btn btn-test">🛠️ Crea Transcript di Test</a>
+        <a href="/transcripts" class="btn">📂 Vedi tutti i transcript</a>
+        <a href="/" class="btn">🏠 Torna alla Home</a>
+    </div>
+
+    <div style="margin-top: 40px; padding: 20px; background: #2f3136; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <h3>💡 Cosa fare?</h3>
+        <p>Se stai testando il sistema, clicca "Crea Transcript di Test" per generare un transcript di esempio.</p>
+        <p>Se questo è un ticket reale, verifica che il sistema di creazione transcript sia configurato correttamente.</p>
+    </div>
 </body>
 </html>
     `);
@@ -923,6 +1128,11 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         const transcriptDir = path.join(__dirname, 'transcripts');
         let list = '';
 
+        // Crea la cartella se non esiste
+        if (!fs.existsSync(transcriptDir)) {
+            fs.mkdirSync(transcriptDir, { recursive: true });
+        }
+
         if (fs.existsSync(transcriptDir)) {
             const allFiles = fs.readdirSync(transcriptDir)
                 .filter(f => f.endsWith('.html') && f !== '.gitkeep')
@@ -991,6 +1201,9 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                         <p style="margin: 5px 0; font-size: 0.9rem;">Server ID: ${guildId}</p>
                         <p style="margin: 5px 0; font-size: 0.9rem;">Cartella transcript: ${transcriptDir}</p>
                         <p style="margin: 5px 0; font-size: 0.9rem;">Cartella esistente: ${fs.existsSync(transcriptDir) ? '✅' : '❌'}</p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">
+                            <a href="/transcript/test-ticket-${Date.now()}" style="color: #5865F2;">Crea un transcript di test</a>
+                        </p>
                     </div>
                 </div>
             `;
@@ -1853,6 +2066,13 @@ try {
     server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Server web attivo sulla porta ${PORT}`);
         console.log(`🌐 Status page: https://gg-shaderss.onrender.com`);
+        
+        // Crea la cartella transcripts all'avvio
+        const transcriptDir = path.join(__dirname, 'transcripts');
+        if (!fs.existsSync(transcriptDir)) {
+            fs.mkdirSync(transcriptDir, { recursive: true });
+            console.log('📁 Cartella transcripts creata');
+        }
     });
 } catch (error) {
     console.error('❌ Errore avvio server web:', error);
