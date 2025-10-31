@@ -20,6 +20,34 @@ const client = new Client({
     ],
 });
 
+// === FUNZIONE MIGLIORATA PER ESTRARRE SERVER ID DAL NOME FILE ===
+function extractServerIdFromFilename(filename) {
+    console.log(`🔍 Analizzo file: ${filename}`);
+    
+    // Pattern per il formato standard: ticket-{tipo}-{username}-{timestamp}-{serverId}.html
+    const standardPattern = /ticket-\w+-\w+-\d+-(\d{17,19})\.html$/;
+    
+    // Pattern per altri formati comuni
+    const patterns = [
+        standardPattern,
+        /-(\d{17,19})\.html$/,
+        /^(\d{17,19})-.*\.html$/,
+        /ticket-.*-(\d{17,19})\.html$/,
+        /.*-(\d{17,19})\.html$/
+    ];
+    
+    for (const pattern of patterns) {
+        const match = filename.match(pattern);
+        if (match && match[1]) {
+            console.log(`✅ Server ID trovato: ${match[1]}`);
+            return match[1];
+        }
+    }
+    
+    console.log(`❌ Nessun Server ID trovato in: ${filename}`);
+    return null;
+}
+
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
@@ -1089,7 +1117,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     }
 });
 
-// === ROTTA TRANSCRIPT PER SERVER SPECIFICO MIGLIORATA ===
+// === ROTTA TRANSCRIPT PER SERVER SPECIFICO CON FILTRAGGIO FUNZIONANTE ===
 app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
         const guildId = req.params.guildId;
@@ -1124,7 +1152,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // LEGGI TUTTI I TRANSCRIPT (NON FILTRARE PER SERVER)
+        // LEGGI E FILTRA I TRANSCRIPT PER SERVER
         const transcriptDir = path.join(__dirname, 'transcripts');
         let list = '';
 
@@ -1135,16 +1163,25 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
         if (fs.existsSync(transcriptDir)) {
             const allFiles = fs.readdirSync(transcriptDir)
-                .filter(f => f.endsWith('.html') && f !== '.gitkeep')
-                .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+                .filter(f => f.endsWith('.html') && f !== '.gitkeep');
 
-            console.log(`📁 Tutti i file transcript trovati:`, allFiles.length);
+            console.log(`📁 TUTTI i file transcript trovati:`, allFiles.length);
 
-            list = allFiles.length > 0 ? `
+            // Filtra i file per server ID con debug dettagliato
+            const serverFiles = allFiles.filter(file => {
+                const serverId = extractServerIdFromFilename(file);
+                const isMatch = serverId === guildId;
+                console.log(`🔍 File: ${file} -> Server ID: ${serverId} -> Match: ${isMatch}`);
+                return isMatch;
+            }).sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+
+            console.log(`🎯 File filtrati per server ${guildId}:`, serverFiles.length);
+
+            list = serverFiles.length > 0 ? `
                 <div class="transcript-header">
                     <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
                     <div class="transcript-stats">
-                        <span class="stat"><i class="fas fa-folder"></i> ${allFiles.length} transcript totali</span>
+                        <span class="stat"><i class="fas fa-folder"></i> ${serverFiles.length} transcript trovati</span>
                         <span class="stat"><i class="fas fa-server"></i> Server ID: ${guildId}</span>
                         <span class="user-info">
                             <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
@@ -1156,16 +1193,18 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 
                 <div style="background: #2f3136; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #5865F2;">
                     <p style="margin: 0; font-size: 0.9rem; color: #b9bbbe;">
-                        <strong>💡 Info:</strong> Mostrando tutti i transcript disponibili. Il sistema di filtraggio per server sarà implementato prossimamente.
+                        <strong>💡 Info:</strong> Mostrando solo i transcript del server <strong>${userGuild.name}</strong>.
+                        File totali: ${allFiles.length} | File filtrati: ${serverFiles.length}
                     </p>
                 </div>
                 
                 <div class="transcript-list">
-                    ${allFiles.map(file => {
+                    ${serverFiles.map(file => {
                         const name = file.replace('.html', '');
                         const stats = fs.statSync(path.join(transcriptDir, file));
                         const date = new Date(stats.mtime).toLocaleString('it-IT');
                         const size = (stats.size / 1024).toFixed(2);
+                        const serverId = extractServerIdFromFilename(file);
                         
                         return `
                         <div class="transcript-item">
@@ -1177,7 +1216,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                                 <div class="transcript-meta">
                                     <span><i class="far fa-clock"></i> ${date}</span>
                                     <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
-                                    <span><i class="fas fa-file"></i> ${file}</span>
+                                    <span><i class="fas fa-server"></i> ${serverId || 'N/A'}</span>
                                 </div>
                             </div>
                             <div class="transcript-actions">
@@ -1194,16 +1233,42 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             ` : `
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <h3>Nessun transcript trovato</h3>
-                    <p>Non ci sono ancora transcript archiviati nel sistema.</p>
-                    <div style="margin-top: 15px; padding: 15px; background: var(--border); border-radius: 8px; text-align: left;">
-                        <p style="margin: 5px 0;"><strong>Debug Info:</strong></p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">Server ID: ${guildId}</p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">Cartella transcript: ${transcriptDir}</p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">Cartella esistente: ${fs.existsSync(transcriptDir) ? '✅' : '❌'}</p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">
-                            <a href="/transcript/test-ticket-${Date.now()}" style="color: #5865F2;">Crea un transcript di test</a>
-                        </p>
+                    <h3>Nessun transcript trovato per questo server</h3>
+                    <p>Non ci sono transcript archiviati per <strong>${userGuild.name}</strong>.</p>
+                    
+                    <div style="margin-top: 20px; padding: 20px; background: var(--border); border-radius: 8px; text-align: left;">
+                        <h4>🔧 Debug Informazioni</h4>
+                        <p><strong>Server ID cercato:</strong> ${guildId}</p>
+                        <p><strong>File totali nella cartella:</strong> ${allFiles.length}</p>
+                        <p><strong>File filtrati per questo server:</strong> ${serverFiles.length}</p>
+                        
+                        ${allFiles.length > 0 ? `
+                            <div style="margin-top: 15px;">
+                                <h5>📁 Analisi file disponibili:</h5>
+                                <div style="background: #2f3136; padding: 15px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
+                                    ${allFiles.slice(0, 10).map(file => {
+                                        const serverId = extractServerIdFromFilename(file);
+                                        return `
+                                        <div style="padding: 8px; border-bottom: 1px solid #40444b;">
+                                            <strong>${file}</strong><br>
+                                            <small style="color: #b9bbbe;">
+                                                Server ID estratto: ${serverId || 'NON TROVATO'} | 
+                                                Match: ${serverId === guildId ? '✅' : '❌'} |
+                                                <a href="/transcript/${file.replace('.html', '')}" target="_blank" style="color: #5865F2;">Prova ad aprire</a>
+                                            </small>
+                                        </div>`;
+                                    }).join('')}
+                                    ${allFiles.length > 10 ? `<div style="padding: 8px; color: #b9bbbe;">... e altri ${allFiles.length - 10} file</div>` : ''}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #2f3136; border-radius: 5px;">
+                            <h5>💡 Perché non vengono mostrati i file?</h5>
+                            <p>I file transcript devono avere l'ID del server nel nome per essere filtrati correttamente.</p>
+                            <p><strong>Formato consigliato:</strong> <code>ticket-support-username-123456789-${guildId}.html</code></p>
+                            <p>Verifica che il sistema di creazione transcript includa l'ID del server nel nome file.</p>
+                        </div>
                     </div>
                 </div>
             `;
