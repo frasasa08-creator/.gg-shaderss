@@ -44,15 +44,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-passport.serializeUser((user, done) => {
-    done(null, user);
-});
-
-passport.deserializeUser((user, done) => {
-    done(null, user);
-});
-
-
 // Configurazione Passport con URL dinamico
 const getCallbackURL = () => {
     if (process.env.RENDER_EXTERNAL_URL) {
@@ -79,6 +70,15 @@ passport.use(new DiscordStrategy({
         return done(error, null);
     }
 }));
+
+// Serializzazione e deserializzazione
+passport.serializeUser((user, done) => {
+    done(null, user);
+});
+
+passport.deserializeUser((user, done) => {
+    done(null, user);
+});
 
 // === MIDDLEWARE DI AUTENTICAZIONE GLOBALE ===
 function requireAuth(req, res, next) {
