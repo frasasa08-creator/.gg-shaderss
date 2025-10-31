@@ -1246,7 +1246,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                                 <button onclick="copyTranscriptLink('${name}')" class="btn-copy" title="Copia link">
                                     <i class="fas fa-copy"></i>
                                 </button>
-                                <button onclick="deleteTranscript('${name}')" class="btn-delete" title="Elimina transcript">
+                                <button onclick="deleteTranscript('${name}', event)" class="btn-delete" title="Elimina transcript">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -1652,6 +1652,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
     <script>
         function copyTranscriptLink(transcriptId) {
+        
             const link = window.location.origin + '/transcript/' + transcriptId;
             navigator.clipboard.writeText(link).then(() => {
                 // Mostra feedback
@@ -1670,8 +1671,8 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         /**
          * Elimina un transcript
          */
-        async function deleteTranscript(transcriptName) {
-            if (!confirm('Sei sicuro di voler eliminare questo transcript?\n\nQuesta azione è irreversibile!')) {
+        async function deleteTranscript(transcriptName, event) {  // ✅ AGGIUNGI event come parametro
+            if (!confirm('Sei sicuro di voler eliminare questo transcript?\n\n⚠️ Questa azione è irreversibile!')) {
                 return;
             }
         
@@ -1708,6 +1709,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 showNotification('❌ Errore di connessione', 'error');
             }
         }
+            
         
         /**
          * Mostra notifica
