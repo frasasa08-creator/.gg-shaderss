@@ -1197,7 +1197,8 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
             console.log(`🎯 File filtrati per server ${guildId}:`, serverFiles.length);
 
-            list = serverFiles.length > 0 ? `
+            if (serverFiles.length > 0) {
+                list = `
                 <div class="transcript-header">
                     <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
                     <div class="transcript-stats">
@@ -1253,7 +1254,9 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                         </div>`;
                     }).join('')}
                 </div>
-            ` : `
+            `;
+            } else {
+                list = `
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
                     <h3>Nessun transcript trovato per questo server</h3>
@@ -1295,6 +1298,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                     </div>
                 </div>
             `;
+            }
         } else {
             list = `
                 <div class="empty-state">
@@ -1308,8 +1312,8 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             `;
         }
 
-        res.send(`
-<!DOCTYPE html>
+        // HTML finale - VERSIONE SICURA
+        const html = `<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -1651,11 +1655,23 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     </div>
 
     <script>
-        /**
-         * Elimina un transcript
-         */
+        function copyTranscriptLink(transcriptId) {
+            const link = window.location.origin + '/transcript/' + transcriptId;
+            navigator.clipboard.writeText(link).then(() => {
+                const btn = event.target.closest('.btn-copy');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+                btn.style.background = 'var(--success)';
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.background = '';
+                }, 2000);
+            });
+        }
+
         async function deleteTranscript(transcriptName, event) {
-            if (!confirm('Sei sicuro di voler eliminare questo transcript?\n\n⚠️ Questa azione è irreversibile!')) {
+            if (!confirm('Sei sicuro di voler eliminare questo transcript?\\n\\n⚠️ Questa azione è irreversibile!')) {
                 return;
             }
 
@@ -1670,17 +1686,14 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 const result = await response.json();
 
                 if (result.success) {
-                    // Mostra notifica successo
                     showNotification('✅ Transcript eliminato con successo!', 'success');
                     
-                    // Rimuovi l'elemento dalla lista
                     const transcriptItem = event.target.closest('.transcript-item');
                     if (transcriptItem) {
                         transcriptItem.style.opacity = '0';
                         transcriptItem.style.transform = 'translateX(-100px)';
                         setTimeout(() => {
                             transcriptItem.remove();
-                            // Aggiorna contatore
                             updateTranscriptCount();
                         }, 300);
                     }
@@ -1692,32 +1705,10 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 showNotification('❌ Errore di connessione', 'error');
             }
         }
-        function copyTranscriptLink(transcriptId) {
-        
-            const link = window.location.origin + '/transcript/' + transcriptId;
-            navigator.clipboard.writeText(link).then(() => {
-                // Mostra feedback
-                const btn = event.target.closest('.btn-copy');
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-check"></i>';
-                btn.style.background = 'var(--success)';
-                
-                setTimeout(() => {
-                    btn.innerHTML = originalHTML;
-                    btn.style.background = '';
-                }, 2000);
-            });
-        }
 
-        
-        
-        /**
-         * Mostra notifica
-         */
         function showNotification(message, type = 'info') {
-            // Crea elemento notifica
             const notification = document.createElement('div');
-            notification.style.cssText = `
+            notification.style.cssText = \`
                 position: fixed;
                 top: 20px;
                 right: 20px;
@@ -1729,19 +1720,17 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 font-family: 'Inter', sans-serif;
                 box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                 transition: all 0.3s ease;
-                ${type === 'success' ? 'background: #00ff88; color: #000;' : ''}
-                ${type === 'error' ? 'background: #ed4245;' : ''}
-                ${type === 'info' ? 'background: #5865F2;' : ''}
-            `;
+                \${type === 'success' ? 'background: #00ff88; color: #000;' : ''}
+                \${type === 'error' ? 'background: #ed4245;' : ''}
+                \${type === 'info' ? 'background: #5865F2;' : ''}
+            \`;
             notification.textContent = message;
             document.body.appendChild(notification);
             
-            // Animazione entrata
             setTimeout(() => {
                 notification.style.transform = 'translateX(0)';
             }, 10);
             
-            // Rimuovi dopo 5 secondi
             setTimeout(() => {
                 notification.style.opacity = '0';
                 notification.style.transform = 'translateX(100px)';
@@ -1753,25 +1742,20 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             }, 5000);
         }
         
-        /**
-         * Aggiorna contatore transcript
-         */
         function updateTranscriptCount() {
             const items = document.querySelectorAll('.transcript-item');
             const countElement = document.querySelector('.transcript-stats .stat:first-child');
             if (countElement) {
                 const newCount = items.length;
-                countElement.innerHTML = `<i class="fas fa-folder"></i> ${newCount} transcript trovati`;
+                countElement.innerHTML = '<i class="fas fa-folder"></i> ' + newCount + ' transcript trovati';
             }
         }
-        
     </script>
 </body>
-</html>
+</html>`;
 
+        res.send(html);
 
-
-        `);
     } catch (error) {
         console.error('❌ Errore nel caricamento transcript server:', error);
         res.status(500).send('Errore interno del server');
