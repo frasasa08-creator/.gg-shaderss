@@ -652,28 +652,27 @@ app.get('/api/status', (req, res) => {
                 timestamp: new Date().toISOString()
             }
         });
-    } catch (error) {
-        console.error('❌ Errore in /api/status:', error);
-        res.json({
-            bot: {
-                status: '🔴 OFFLINE',
-                statusCode: 0,
-                tag: 'Errore di connessione',
-                uptime: '0h 0m 0s',
-                guilds: 0,
-                ping: 'N/A',
-                lastUpdate: new Date().toISOString()
-            },
-            server: {
-                status: '🟢 ONLINE',
-                uptime: process.uptime(),
-                timestamp: new Date().toISOString()
-                ping: client.ws.ping,
-                guilds: client.guilds.cache.size,
-                tags: 'ticket, support, advanced'
-            }
-        });
-    }
-});
+    } } catch (error) {
+    console.error('Errore in /api/status:', error);
+    res.json({
+        bot: {
+            status: 'OFFLINE',
+            statusCode: 0,
+            tag: 'Errore di connessione',
+            uptime: '0h 0m 0s',
+            guilds: 0,
+            ping: 'N/A',
+            lastUpdate: new Date().toISOString()
+        },
+        server: {
+            status: 'ONLINE',
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString(),
+            ping: 'N/A',
+            guilds: 0,
+            tags: 'ticket, support, advanced'
+        }
+    });
+}
 
 console.log('✅ File index.js caricato completamente');
