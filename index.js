@@ -49,6 +49,7 @@ console.log('🔧 DEBUG Variabili OAuth:');
 console.log('CLIENT_ID:', process.env.CLIENT_ID ? 'Presente' : 'Mancante');
 console.log('DISCORD_CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? 'Presente' : 'Mancante');
 console.log('RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL || 'Non impostato');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'Non impostato');
 
 // Configurazione Passport con URL dinamico e debugging
 const getCallbackURL = () => {
@@ -67,7 +68,7 @@ const getCallbackURL = () => {
 };
 
 // Configurazione DiscordStrategy con error handling migliorato
-passport.use(new DiscordStrategy({
+const strategy = new DiscordStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
     callbackURL: getCallbackURL(),
@@ -92,7 +93,33 @@ passport.use(new DiscordStrategy({
         console.error('❌ Errore durante autenticazione:', error);
         return done(error, null);
     }
-}));
+});
+
+// Aggiungi logging per gli eventi della strategy
+strategy._oauth2.setAuthMethod('Bearer');
+strategy._oauth2._useAuthorizationHeaderForGET = true;
+
+// Override della funzione per il token per aggiungere logging
+const originalGetOAuthAccessToken = strategy._oauth2.getOAuthAccessToken.bind(strategy._oauth2);
+strategy._oauth2.getOAuthAccessToken = function(code, params, callback) {
+    console.log('🔄 Richiesta token OAuth con codice:', code ? 'Presente' : 'Mancante');
+    console.log('🔗 URL token:', this._getAccessTokenUrl());
+    
+    return originalGetOAuthAccessToken(code, params, function(err, accessToken, refreshToken, params) {
+        if (err) {
+            console.error('❌ Errore ottenimento token OAuth:', err);
+            console.error('❌ Dettagli errore:', {
+                statusCode: err.statusCode,
+                data: err.data
+            });
+        } else {
+            console.log('✅ Token OAuth ottenuto con successo');
+        }
+        callback(err, accessToken, refreshToken, params);
+    });
+};
+
+passport.use(strategy);
 
 // Serializzazione e deserializzazione
 passport.serializeUser((user, done) => {
@@ -127,6 +154,7 @@ app.use(requireAuth);
 // === ROTTE DI AUTENTICAZIONE ===
 app.get('/auth/discord', (req, res, next) => {
     console.log('🚀 Inizio autenticazione OAuth');
+    console.log('🔗 Redirect a Discord OAuth');
     passport.authenticate('discord')(req, res, next);
 });
 
@@ -137,7 +165,8 @@ app.get('/auth/discord/callback',
         console.log('❌ Error parameter:', req.query.error);
         
         passport.authenticate('discord', { 
-            failureRedirect: '/auth/failure'
+            failureRedirect: '/auth/failure',
+            failureMessage: true
         })(req, res, next);
     },
     (req, res) => {
@@ -147,6 +176,44 @@ app.get('/auth/discord/callback',
         res.redirect(returnTo);
     }
 );
+
+// Middleware per gestire errori
+app.use((err, req, res, next) => {
+    console.error('❌ Errore server:', err);
+    res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Errore Interno</title>
+            <style>
+                body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
+                       border-radius: 8px; text-decoration: none; margin: 10px; }
+                .error-details { background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
+            </style>
+        </head>
+        <body>
+            <h1>❌ Errore Interno del Server</h1>
+            <p>Si è verificato un errore durante l'autenticazione.</p>
+            
+            <div class="error-details">
+                <strong>Dettagli errore:</strong><br>
+                ${err.message || 'Errore sconosciuto'}
+            </div>
+            
+            <p>Verifica che:</p>
+            <ul style="text-align: left; display: inline-block;">
+                <li>Le variabili d'ambiente siano configurate correttamente</li>
+                <li>Il Client Secret sia valido</li>
+                <li>Il Callback URL sia impostato correttamente nel Discord Developer Portal</li>
+            </ul>
+            <br>
+            <a href="/auth/discord" class="btn">Riprova Login</a>
+            <a href="/" class="btn">Torna alla Home</a>
+        </body>
+        </html>
+    `);
+});
 
 app.get('/auth/failure', (req, res) => {
     console.log('❌ Autenticazione fallita');
@@ -179,7 +246,7 @@ app.get('/auth/failure', (req, res) => {
             <ul style="text-align: left; display: inline-block;">
                 <li>Il bot sia invitato nel server</li>
                 <li>I permessi OAuth siano configurati correttamente</li>
-                <li>Il callback URL sia impostato correttamente</li>
+                <li>Il callback URL sia impostato correttamente nel Discord Developer Portal</li>
             </ul>
             <br>
             <a href="/auth/discord" class="btn">Riprova Login</a>
@@ -200,6 +267,8 @@ app.get('/logout', (req, res) => {
         });
     });
 });
+
+// ... (il resto del codice rimane uguale, mantenendo tutte le altre route e funzionalità)
 
 // === MIDDLEWARE PER VERIFICA STAFF ===
 function checkStaffRole(req, res, next) {
@@ -342,6 +411,8 @@ app.get('/api/status', (req, res) => {
         });
     }
 });
+
+// ... (mantieni tutto il resto del codice per transcripts, homepage, etc.)
 
 // === ROTTA TRANSCRIPT ONLINE ===
 app.get('/transcript/:identifier', (req, res) => {
