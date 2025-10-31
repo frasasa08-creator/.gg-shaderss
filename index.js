@@ -134,174 +134,111 @@ app.get('/health', (req, res) => {
     }
 });
 
-// === PAGINA PRINCIPALE: STATUS + WIDGET + PULSANTE INVITO ===
+// HOMEPAGE CON PULSANTE TRANSCRIPT
 app.get('/', (req, res) => {
-    // Fallback JSON per Render
-    if (req.headers['user-agent']?.includes('Render') || req.query.raw) {
-        return res.status(200).json({
-            status: 'Bot is running',
-            bot: client?.isReady() ? 'online' : 'starting',
-            timestamp: new Date().toISOString()
-        });
-    }
+    const transcriptDir = path.join(__dirname, 'transcripts');
+    let transcriptList = '';
 
-    // Link di invito (sostituisci con il tuo CLIENT_ID)
-    const INVITE_LINK = `https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8`;
+    if (fs.existsSync(transcriptDir)) {
+        const files = fs.readdirSync(transcriptDir)
+            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
+            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime)
+            .slice(0, 10); // ultimi 10
+
+        if (files.length > 0) {
+            transcriptList = `
+            <div class="transcripts">
+                <h2>Ultimi Transcript</h2>
+                <ul>
+                    ${files.map(file => {
+                        const name = file.replace('.html', '');
+                        const date = new Date(fs.statSync(path.join(transcriptDir, file)).mtime).toLocaleString('it-IT');
+                        return `<li><a href="/transcript/${name}" target="_blank">#${name}</a> <small>${date}</small></li>`;
+                    }).join('')}
+                </ul>
+                <p><a href="/transcripts" class="btn">Vedi tutti i transcript</a></p>
+            </div>`;
+        } else {
+            transcriptList = `<p>Nessun transcript disponibile al momento.</p>`;
+        }
+    }
 
     res.send(`
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>.gg/shaderss • Status</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #0f0f0f;
-      --card: #1a1a1a;
-      --text: #e0e0e0;
-      --text-light: #aaaaaa;
-      --accent: #00d4ff;
-      --border: #333333;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
-      min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px;
-    }
-    .container {
-      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-      padding: 32px; max-width: 900px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      position: relative;
-    }
-    .header {
-      text-align: center; margin-bottom: 32px;
-    }
-    .header h1 {
-      font-size: 2.2rem; font-weight: 700; color: white;
-    }
-    .header p {
-      color: var(--text-light); margin-top: 8px; font-size: 1rem;
-    }
-    .invite-btn {
-      position: absolute; top: 20px; right: 20px;
-      background: #5865F2; color: white; padding: 10px 18px;
-      border-radius: 8px; font-weight: 600; font-size: 0.9rem;
-      text-decoration: none; display: flex; align-items: center; gap: 8px;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
-    }
-    .invite-btn:hover {
-      background: #4752c4; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(88, 101, 242, 0.4);
-    }
-    .invite-btn svg {
-      width: 18px; height: 18px;
-    }
-    .grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
-    }
-    @media (max-width: 768px) {
-      .grid { grid-template-columns: 1fr; }
-      .invite-btn { position: static; margin-bottom: 20px; justify-self: center; }
-    }
-    .card {
-      background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid var(--border);
-    }
-    .card h3 {
-      font-size: 1.1rem; margin-bottom: 16px; color: white; display: flex; align-items: center; gap: 8px;
-    }
-    .status {
-      font-size: 2rem; font-weight: 700; display: flex; align-items: center; gap: 12px;
-    }
-    .online { color: #00ff88; }
-    .offline { color: #ff4444; }
-    .pulse { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
-    .info-grid {
-      display: grid; grid-template-columns: max-content 1fr; gap: 12px 16px; font-size: 0.95rem;
-    }
-    .label { color: var(--text-light); }
-    .value { color: white; text-align: right; }
-    .widget-container {
-      background: #2f3136; border-radius: 12px; overflow: hidden; border: 1px solid #444;
-    }
-    .footer {
-      text-align: center; margin-top: 32px; color: var(--text-light); font-size: 0.9rem;
-    }
-    .refresh {
-      text-align: center; margin-top: 16px; font-size: 0.8rem; color: #666;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>.gg/shaderss • Status</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { margin:0; background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; text-align:center; padding:40px; }
+        .container { max-width:600px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
+        h1 { font-size:2.5em; margin:0; color:#5865F2; }
+        .tagline { color:#b9bbbe; font-size:1.1em; margin:10px 0; }
+        .status { margin:30px 0; padding:20px; background:#2f3136; border-radius:12px; }
+        .status p { margin:8px 0; font-family:monospace; }
+        .loading { color:#00ff88; animation:pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        .btn { 
+            display:inline-block; background:#5865F2; color:white; padding:12px 24px; 
+            border-radius:8px; text-decoration:none; font-weight:600; margin-top:15px; 
+            transition:0.3s; 
+        }
+        .btn:hover { background:#4752c4; transform:translateY(-2px); }
+        .transcripts { margin-top:40px; text-align:left; background:#2f3136; padding:20px; border-radius:12px; }
+        .transcripts h2 { margin-top:0; color:#00ff88; }
+        .transcripts ul { list-style:none; padding:0; }
+        .transcripts li { padding:8px 0; border-bottom:1px solid #40444b; }
+        .transcripts li:last-child { border:none; }
+        .transcripts a { color:#00b0f4; text-decoration:none; }
+        .transcripts a:hover { text-decoration:underline; }
+        .transcripts small { color:#72767d; float:right; }
+        footer { margin-top:50px; color:#72767d; font-size:0.9em; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <!-- PULSANTE INVITA -->
-    <a href="${INVITE_LINK}" target="_blank" class="invite-btn">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a13.83 13.83 0 0 0 1.226-1.963a.074.074 0 0 0-.041-.105a13.2 13.2 0 0 1-1.872-.878a.075.075 0 0 1-.008-.125a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.075.075 0 0 1-.006.125a12.3 12.3 0 0 1-1.873.878a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.963a.077.077 0 0 0 .084.028a19.9 19.9 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.057c.49-5.38-.2-9.89-3.45-13.66a.07.07 0 0 0-.032-.027z"/></svg>
-      Bot Invite
-    </a>
+    <div class="container">
+        <h1>.gg/shaderss</h1>
+        <p class="tagline">Discord Bot • 24/7</p>
 
-    <div class="header">
-      <h1>.gg/shaderss</h1>
-      <p>Discord Bot • 24/7</p>
-    </div>
-
-    <div class="grid">
-      <!-- STATUS CARD -->
-      <div class="card">
-        <h3>Bot Status</h3>
-        <div class="status" id="status">Caricamento...</div>
-        <div class="info-grid">
-          <span class="label">Tag:</span> <span class="value" id="tag">-</span>
-          <span class="label">Server:</span> <span class="value" id="guilds">-</span>
-          <span class="label">Ping:</span> <span class="value" id="ping">-</span>
-          <span class="label">Uptime:</span> <span class="value" id="uptime">-</span>
+        <div class="status">
+            <p><i class="fas fa-circle loading"></i> <strong>Caricamento...</strong></p>
+            <p>Tag: <span id="tags">-</span> | Server: <span id="guilds">-</span> | Ping: <span id="ping">-</span>ms | Uptime: <span id="uptime">-</span></p>
         </div>
-      </div>
 
-      <!-- WIDGET CARD -->
-      <div class="card">
-        <h3>.gg/shaderss server live</h3>
-        <div class="widget-container">
-          <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" 
-                  width="100%" height="400" allowtransparency="true" frameborder="0" 
-                  sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
-                  style="border-radius: 8px;"></iframe>
-        </div>
-      </div>
+        <a href="https://discord.com/oauth2/authorize?client_id=TUO_CLIENT_ID&scope=bot&permissions=8" class="btn">
+            <i class="fab fa-discord"></i> Invita il Bot
+        </a>
+
+        ${transcriptList}
+
     </div>
 
-    <div class="footer">
-      Powered by sasa1111
-    </div>
-    <div class="refresh"></div>
-  </div>
+    <footer>
+        <p>Bot by <strong>Shaderss</strong> • <a href="/api/status">API Status</a></p>
+    </footer>
 
-  <script>
-    async function updateStatus() {
-      try {
-        const res = await fetch('/api/status');
-        const data = await res.json();
-        const bot = data.bot;
-
-        const statusEl = document.getElementById('status');
-        statusEl.innerHTML = bot.statusCode === 1 
-          ? '<span class="online pulse">ONLINE</span>' 
-          : '<span class="offline">OFFLINE</span>';
-
-        document.getElementById('tag').textContent = bot.tag;
-        document.getElementById('guilds').textContent = bot.guilds;
-        document.getElementById('ping').textContent = bot.ping + 'ms';
-        document.getElementById('uptime').textContent = bot.uptime;
-      } catch (err) {
-        document.getElementById('status').innerHTML = '<span class="offline">ERRORE</span>';
-      }
-    }
-
-    updateStatus();
-    setInterval(updateStatus, 10000);
-  </script>
+    <script>
+        async function updateStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                document.getElementById('tags').textContent = data.tags || '-';
+                document.getElementById('guilds').textContent = data.guilds || '-';
+                document.getElementById('ping').textContent = data.ping || '-';
+                document.getElementById('uptime').textContent = data.uptime || '-';
+                document.querySelector('.loading').style.color = '#00ff88';
+                document.querySelector('.loading').textContent = 'Online';
+            } catch(e) {
+                document.querySelector('.loading').style.color = '#ed4245';
+                document.querySelector('.loading').textContent = 'Offline';
+            }
+        }
+        updateStatus();
+        setInterval(updateStatus, 10000);
+    </script>
 </body>
 </html>
     `);
