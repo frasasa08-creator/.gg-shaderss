@@ -216,11 +216,13 @@ async function closeTicketWithReason(interaction) {
             fs.mkdirSync(transcriptDir, { recursive: true });
         }
 
-        const cleanChannelName = channel.name.toLowerCase().replace(/[^a-z0-9\-]/g, '-');
-        const transcriptPath = path.join(transcriptDir, `${cleanChannelName}.html`);
+        // NOME UNIVOCO: nome-canale + ID ticket + timestamp
+        const ticketIdPart = ticket.id.toString().padStart(4, '0');
+        const timestamp = Date.now().toString().slice(-6); // ultimi 6 cifre
+        const uniqueName = `${channel.name.toLowerCase().replace(/[^a-z0-9\-]/g, '-')}-${ticketIdPart}-${timestamp}`;
+        const transcriptPath = path.join(transcriptDir, `${uniqueName}.html`);
         fs.writeFileSync(transcriptPath, transcript.attachment);
-
-        const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${cleanChannelName}`;
+        const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${uniqueName}`;
 
         // === INVIO DM CON LINK ===
         let ticketCreator = null;
