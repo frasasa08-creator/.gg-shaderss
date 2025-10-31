@@ -878,20 +878,66 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // Leggi i transcript per questo server specifico
+        // LEGGI I TRANSCRIPT SOLO PER QUESTO SERVER SPECIFICO
         const transcriptDir = path.join(__dirname, 'transcripts');
         let list = '';
 
         if (fs.existsSync(transcriptDir)) {
-            const files = fs.readdirSync(transcriptDir)
-                .filter(f => f.endsWith('.html') && f !== '.gitkeep')
-                .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+            const allFiles = fs.readdirSync(transcriptDir)
+                .filter(f => f.endsWith('.html') && f !== '.gitkeep');
 
-            list = files.length > 0 ? `
+            // APPROCCIO 1: Usa il database per filtrare i ticket di questo server
+            let serverFiles = [];
+            
+            try {
+                // Cerca nel database i ticket chiusi di questo server
+                const ticketResult = await db.query(
+                    'SELECT channel_id FROM tickets WHERE guild_id = $1 AND status = $2',
+                    [guildId, 'closed']
+                );
+                
+                const serverTicketIds = ticketResult.rows.map(row => row.channel_id);
+                console.log(`🎫 Ticket chiusi per server ${guildId}:`, serverTicketIds);
+                
+                // Filtra i file che corrispondono ai ticket di questo server
+                serverFiles = allFiles.filter(file => {
+                    const fileName = file.replace('.html', '');
+                    return serverTicketIds.includes(fileName);
+                }).sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+                
+            } catch (dbError) {
+                console.error('❌ Errore database, uso approccio alternativo:', dbError);
+                
+                // APPROCCIO 2: Cerca l'ID del server nei file transcript
+                serverFiles = allFiles.filter(file => {
+                    try {
+                        const filePath = path.join(transcriptDir, file);
+                        const content = fs.readFileSync(filePath, 'utf8');
+                        
+                        // Cerca l'ID del server nel contenuto HTML
+                        if (content.includes(`guild-id="${guildId}"`) || 
+                            content.includes(`server-id="${guildId}"`) ||
+                            content.includes(`data-guild="${guildId}"`) ||
+                            content.includes(guildId)) {
+                            return true;
+                        }
+                        
+                        return false;
+                    } catch (error) {
+                        console.error(`Errore lettura file ${file}:`, error);
+                        return false;
+                    }
+                }).sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+            }
+
+            console.log(`📁 File transcript trovati per server ${guildId}:`, serverFiles.length);
+
+            list = serverFiles.length > 0 ? `
                 <div class="transcript-header">
                     <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
                     <div class="transcript-stats">
-                        <span class="stat"><i class="fas fa-folder"></i> ${files.length} transcript totali</span>
+                        <span class="stat"><i class="fas fa-folder"></i> ${serverFiles.length} transcript trovati</span>
+                        <span class="stat"><i class="fas fa-server"></i> Server ID: ${guildId}</span>
                         <span class="user-info">
                             <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
                                  class="user-avatar" alt="Avatar">
@@ -900,7 +946,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                     </div>
                 </div>
                 <div class="transcript-list">
-                    ${files.map(file => {
+                    ${serverFiles.map(file => {
                         const name = file.replace('.html', '');
                         const stats = fs.statSync(path.join(transcriptDir, file));
                         const date = new Date(stats.mtime).toLocaleString('it-IT');
@@ -916,6 +962,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                                 <div class="transcript-meta">
                                     <span><i class="far fa-clock"></i> ${date}</span>
                                     <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
+                                    <span><i class="fas fa-hashtag"></i> ${name}</span>
                                 </div>
                             </div>
                             <div class="transcript-actions">
@@ -929,8 +976,14 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             ` : `
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <h3>Nessun transcript trovato</h3>
-                    <p>Non ci sono ancora transcript archiviati per questo server.</p>
+                    <h3>Nessun transcript trovato per questo server</h3>
+                    <p>Non ci sono ancora transcript archiviati per <strong>${userGuild.name}</strong>.</p>
+                    <div style="margin-top: 15px; padding: 15px; background: var(--border); border-radius: 8px; text-align: left;">
+                        <p style="margin: 5px 0;"><strong>Debug Info:</strong></p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">Server ID: ${guildId}</p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">File totali nella cartella: ${allFiles.length}</p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">File filtrati: ${serverFiles.length}</p>
+                    </div>
                 </div>
             `;
         } else {
@@ -1201,6 +1254,11 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 flex-direction: column;
                 align-items: flex-start;
             }
+            
+            .transcript-meta {
+                flex-direction: column;
+                gap: 5px;
+            }
         }
     </style>
 </head>
@@ -1224,7 +1282,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             ${userGuild.icon ? `<img src="https://cdn.discordapp.com/icons/${userGuild.id}/${userGuild.icon}.png" class="server-icon" alt="${userGuild.name}">` : '<div class="server-icon" style="background: var(--primary); display: flex; align-items: center; justify-content: center; color: white;"><i class="fas fa-server"></i></div>'}
             <div class="server-info">
                 <h2>${userGuild.name}</h2>
-                <p>ID: ${userGuild.id}</p>
+                <p>ID: ${userGuild.id} ${guildId === '1431629401384026234' ? '<span style="color: var(--success); margin-left: 10px;">(Server Principale)</span>' : ''}</p>
             </div>
         </div>
         
