@@ -247,7 +247,7 @@ app.get('/', (req, res) => {
         <header>
             <h1>.gg/shaderss</h1>
             <p class="tagline">Discord Bot • 24/7</p>
-            <a href="https://discord.com/oauth2/authorize?client_id=TUO_CLIENT_ID&scope=bot&permissions=8" class="btn">
+            <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" class="btn">
                 Bot Invite
             </a>
         </header>
@@ -265,7 +265,7 @@ app.get('/', (req, res) => {
             <div class="live-card">
                 <h3>.gg/shaderss server live</h3>
                 <div class="members" id="members">
-                    <p>Caricamento membri...</p>
+                    <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" width="350" height="500" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
                 </div>
                 <div style="text-align:center; margin-top:15px;">
                     <a href="https://discord.gg/shaderss" class="btn" target="_blank">Join Discord</a>
