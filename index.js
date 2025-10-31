@@ -252,7 +252,7 @@ app.get('/', (req, res) => {
             </a>
         </header>
 
-        <div class="main">
+        <!--<div class="main">
             <div class="status-card">
                 <h2>Bot Status</h2>
                 <p><i class="fas fa-circle loading"></i> <strong>Caricamento...</strong></p>
@@ -260,7 +260,7 @@ app.get('/', (req, res) => {
                 <div class="info"><span>Server:</span> <span id="guilds">-</span></div>
                 <div class="info"><span>Ping:</span> <span id="ping">-</span>ms</div>
                 <div class="info"><span>Uptime:</span> <span id="uptime">-</span></div>
-            </div>
+            </div>-->
 
             <!-- WIDGET CARD -->
               <div class="card">
