@@ -697,6 +697,7 @@ client.once('clientReady', async () => {
     }, 10 * 60 * 1000); // Ogni 10 minuti
 });
 
+
 // Gestione shutdown graceful ⬅️ MODIFICATO
 async function gracefulShutdown(reason = 'Unknown') {
     console.log(`🔴 Arresto bot in corso... Motivo: ${reason}`);
