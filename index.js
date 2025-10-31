@@ -7,6 +7,12 @@ require('dotenv').config();
 
 const db = require('./db');  // importa db da nuovo file
 
+// Log iniziali per debug
+console.log('🔧 Ambiente:', process.env.NODE_ENV || 'development');
+console.log('🔧 Porta:', process.env.PORT || '3000 (default)');
+console.log('🔧 Discord Token presente:', !!process.env.DISCORD_TOKEN);
+console.log('🔧 Client ID presente:', !!process.env.CLIENT_ID);
+
 // Inizializzazione client Discord
 const client = new Client({
     intents: [
@@ -21,7 +27,7 @@ const client = new Client({
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT; // ⬅️ RIMOSSO || 3000
+const PORT = process.env.PORT || 3000; // ⬅️ CORRETTO con default
 
 app.use(express.json());
 
@@ -88,12 +94,44 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// Health check per Render
+// Health check avanzato per Render
 app.get('/health', (req, res) => {
+    const botStatus = client?.isReady() ? 'online' : 'offline';
+    const uptime = process.uptime();
+    
+    // Render considera il servizio healthy solo se:
+    // - Il server web risponde
+    // - Il bot è connesso a Discord
+    // - L'uptime è consistente
+    
+    if (client && client.isReady()) {
+        res.status(200).json({ 
+            status: 'healthy',
+            bot: botStatus,
+            discord: 'connected',
+            uptime: uptime,
+            timestamp: new Date().toISOString(),
+            guilds: client.guilds.cache.size
+        });
+    } else {
+        // Se il bot non è pronto, restituisci 503 ma non 500
+        res.status(503).json({
+            status: 'unhealthy', 
+            bot: botStatus,
+            discord: 'disconnected',
+            uptime: uptime,
+            message: 'Bot connecting to Discord...'
+        });
+    }
+});
+
+// Endpoint ping per keep-alive interno
+app.get('/ping', (req, res) => {
     res.status(200).json({ 
-        status: 'OK', 
-        bot: client?.user?.tag || 'Offline',
-        uptime: process.uptime() 
+        status: 'pong', 
+        timestamp: new Date().toISOString(),
+        memory: process.memoryUsage(),
+        uptime: process.uptime()
     });
 });
 
@@ -308,16 +346,28 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Avvia server web con error handling ⬅️ MODIFICATO
+// Avvia server web con error handling migliorato
 let server;
 try {
-    server = app.listen(PORT, () => {
+    server = app.listen(PORT, '0.0.0.0', () => {  // ⬅️ Aggiungi '0.0.0.0'
         console.log(`🚀 Server web attivo sulla porta ${PORT}`);
-        console.log(`🌐 Status page disponibile`);
+        console.log(`🌐 Status page: http://0.0.0.0:${PORT}`);
+        console.log(`❤️  Health check: http://0.0.0.0:${PORT}/health`);
+        console.log(`📊 API Status: http://0.0.0.0:${PORT}/api/status`);
     });
+    
+    // Gestione errori del server
+    server.on('error', (error) => {
+        console.error('❌ Errore server web:', error);
+        if (error.code === 'EADDRINUSE') {
+            console.log(`⚠️  Porta ${PORT} già in uso, riavvio...`);
+        }
+    });
+    
 } catch (error) {
-    console.error('❌ Errore avvio server web:', error);
-    console.log('⚠️  Server web non avviato, ma bot Discord funziona');
+    console.error('❌ Errore critico avvio server web:', error);
+    // Non uscire dal processo, lascia che il bot Discord funzioni comunque
+    console.log('⚠️  Server web non avviato, ma bot Discord continua...');
 }
 
 // Collezioni comandi e cooldown
@@ -695,10 +745,19 @@ client.once('clientReady', async () => {
         });
         
     }, 10 * 60 * 1000); // Ogni 10 minuti
+
+    // Ping interno al servizio per mantenerlo attivo
+    setInterval(async () => {
+        try {
+            const response = await fetch(`http://localhost:${PORT}/ping`);
+            console.log(`❤️  Internal ping: ${response.status}`);
+        } catch (error) {
+            console.log('⚠️  Internal ping failed (maybe starting up)');
+        }
+    }, 4 * 60 * 1000); // Ogni 4 minuti
 });
 
-
-// Gestione shutdown graceful ⬅️ MODIFICATO
+// Gestione shutdown graceful
 async function gracefulShutdown(reason = 'Unknown') {
     console.log(`🔴 Arresto bot in corso... Motivo: ${reason}`);
     
@@ -764,7 +823,8 @@ module.exports = { client, db };
 
 // Login bot
 client.login(process.env.DISCORD_TOKEN).catch(error => {
-    console.error('❌ Errore login bot:', error);
+    console.error('❌ Errore FATALE login bot:', error);
+    console.log('🔴 Arresto processo...');
     process.exit(1);
 });
 
