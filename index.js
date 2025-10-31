@@ -344,15 +344,46 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// === ROTTA TRANSCRIPT ONLINE ===
+// === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
 app.get('/transcript/:identifier', (req, res) => {
     const identifier = req.params.identifier.toLowerCase();
     const transcriptDir = path.join(__dirname, 'transcripts');
-    const filePath = path.join(transcriptDir, `${identifier}.html`);
-
-    if (fs.existsSync(filePath)) {
+    
+    console.log(`🔍 Ricerca transcript: ${identifier}`);
+    
+    // Cerca il file esatto
+    const exactPath = path.join(transcriptDir, `${identifier}.html`);
+    
+    if (fs.existsSync(exactPath)) {
+        console.log(`✅ Transcript trovato: ${identifier}.html`);
         res.setHeader('Content-Type', 'text/html');
-        return res.sendFile(filePath);
+        return res.sendFile(exactPath);
+    }
+    
+    // Se non trova il file esatto, cerca file che contengono l'identifier
+    try {
+        const allFiles = fs.readdirSync(transcriptDir)
+            .filter(f => f.endsWith('.html') && f !== '.gitkeep');
+        
+        console.log(`📁 File disponibili:`, allFiles);
+        
+        // Cerca file che contengono l'identifier nel nome
+        const matchingFiles = allFiles.filter(file => {
+            const fileNameWithoutExt = file.replace('.html', '').toLowerCase();
+            return fileNameWithoutExt.includes(identifier) || identifier.includes(fileNameWithoutExt);
+        });
+        
+        if (matchingFiles.length > 0) {
+            console.log(`✅ Transcript trovato con match parziale: ${matchingFiles[0]}`);
+            const filePath = path.join(transcriptDir, matchingFiles[0]);
+            res.setHeader('Content-Type', 'text/html');
+            return res.sendFile(filePath);
+        }
+        
+        console.log(`❌ Nessun transcript trovato per: ${identifier}`);
+        
+    } catch (error) {
+        console.error('Errore ricerca transcript:', error);
     }
 
     res.status(404).send(`
@@ -367,11 +398,21 @@ app.get('/transcript/:identifier', (req, res) => {
         h1 { color: #ed4245; }
         p { font-size: 1.2em; }
         .discord { color: #5865F2; }
+        .debug { background: #2f3136; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: left; font-family: monospace; }
     </style>
 </head>
 <body>
     <h1>Transcript non trovato</h1>
     <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
+    
+    <div class="debug">
+        <strong>Debug Info:</strong><br>
+        Identifier cercato: ${identifier}<br>
+        Cartella transcripts: ${transcriptDir}<br>
+        File .html nella cartella: ${fs.existsSync(transcriptDir) ? fs.readdirSync(transcriptDir).filter(f => f.endsWith('.html')).length : 'Cartella non esistente'}
+    </div>
+    
+    <a href="/transcripts" style="color: #5865F2; text-decoration: none;">← Torna alla lista transcript</a>
 </body>
 </html>
     `);
@@ -843,7 +884,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     }
 });
 
-// === ROTTA TRANSCRIPT PER SERVER SPECIFICO ===
+// === ROTTA TRANSCRIPT PER SERVER SPECIFICO MIGLIORATA ===
 app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
         const guildId = req.params.guildId;
@@ -878,65 +919,22 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // LEGGI I TRANSCRIPT SOLO PER QUESTO SERVER SPECIFICO
+        // LEGGI TUTTI I TRANSCRIPT (NON FILTRARE PER SERVER)
         const transcriptDir = path.join(__dirname, 'transcripts');
         let list = '';
 
         if (fs.existsSync(transcriptDir)) {
             const allFiles = fs.readdirSync(transcriptDir)
-                .filter(f => f.endsWith('.html') && f !== '.gitkeep');
+                .filter(f => f.endsWith('.html') && f !== '.gitkeep')
+                .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
 
-            // APPROCCIO 1: Usa il database per filtrare i ticket di questo server
-            let serverFiles = [];
-            
-            try {
-                // Cerca nel database i ticket chiusi di questo server
-                const ticketResult = await db.query(
-                    'SELECT channel_id FROM tickets WHERE guild_id = $1 AND status = $2',
-                    [guildId, 'closed']
-                );
-                
-                const serverTicketIds = ticketResult.rows.map(row => row.channel_id);
-                console.log(`🎫 Ticket chiusi per server ${guildId}:`, serverTicketIds);
-                
-                // Filtra i file che corrispondono ai ticket di questo server
-                serverFiles = allFiles.filter(file => {
-                    const fileName = file.replace('.html', '');
-                    return serverTicketIds.includes(fileName);
-                }).sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
-                
-            } catch (dbError) {
-                console.error('❌ Errore database, uso approccio alternativo:', dbError);
-                
-                // APPROCCIO 2: Cerca l'ID del server nei file transcript
-                serverFiles = allFiles.filter(file => {
-                    try {
-                        const filePath = path.join(transcriptDir, file);
-                        const content = fs.readFileSync(filePath, 'utf8');
-                        
-                        // Cerca l'ID del server nel contenuto HTML
-                        if (content.includes(`guild-id="${guildId}"`) || 
-                            content.includes(`server-id="${guildId}"`) ||
-                            content.includes(`data-guild="${guildId}"`) ||
-                            content.includes(guildId)) {
-                            return true;
-                        }
-                        
-                        return false;
-                    } catch (error) {
-                        console.error(`Errore lettura file ${file}:`, error);
-                        return false;
-                    }
-                }).sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
-            }
+            console.log(`📁 Tutti i file transcript trovati:`, allFiles.length);
 
-            console.log(`📁 File transcript trovati per server ${guildId}:`, serverFiles.length);
-
-            list = serverFiles.length > 0 ? `
+            list = allFiles.length > 0 ? `
                 <div class="transcript-header">
                     <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
                     <div class="transcript-stats">
-                        <span class="stat"><i class="fas fa-folder"></i> ${serverFiles.length} transcript trovati</span>
+                        <span class="stat"><i class="fas fa-folder"></i> ${allFiles.length} transcript totali</span>
                         <span class="stat"><i class="fas fa-server"></i> Server ID: ${guildId}</span>
                         <span class="user-info">
                             <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
@@ -945,8 +943,15 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                         </span>
                     </div>
                 </div>
+                
+                <div style="background: #2f3136; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #5865F2;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #b9bbbe;">
+                        <strong>💡 Info:</strong> Mostrando tutti i transcript disponibili. Il sistema di filtraggio per server sarà implementato prossimamente.
+                    </p>
+                </div>
+                
                 <div class="transcript-list">
-                    ${serverFiles.map(file => {
+                    ${allFiles.map(file => {
                         const name = file.replace('.html', '');
                         const stats = fs.statSync(path.join(transcriptDir, file));
                         const date = new Date(stats.mtime).toLocaleString('it-IT');
@@ -957,18 +962,21 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                             <div class="transcript-info">
                                 <div class="transcript-name">
                                     <i class="fas fa-ticket-alt"></i>
-                                    <a href="/transcript/${name}" target="_blank">#${name}</a>
+                                    <a href="/transcript/${name}" target="_blank">${name}</a>
                                 </div>
                                 <div class="transcript-meta">
                                     <span><i class="far fa-clock"></i> ${date}</span>
                                     <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
-                                    <span><i class="fas fa-hashtag"></i> ${name}</span>
+                                    <span><i class="fas fa-file"></i> ${file}</span>
                                 </div>
                             </div>
                             <div class="transcript-actions">
                                 <a href="/transcript/${name}" target="_blank" class="btn-view">
                                     <i class="fas fa-eye"></i> Visualizza
                                 </a>
+                                <button onclick="copyTranscriptLink('${name}')" class="btn-copy" title="Copia link">
+                                    <i class="fas fa-copy"></i>
+                                </button>
                             </div>
                         </div>`;
                     }).join('')}
@@ -976,18 +984,27 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             ` : `
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <h3>Nessun transcript trovato per questo server</h3>
-                    <p>Non ci sono ancora transcript archiviati per <strong>${userGuild.name}</strong>.</p>
+                    <h3>Nessun transcript trovato</h3>
+                    <p>Non ci sono ancora transcript archiviati nel sistema.</p>
                     <div style="margin-top: 15px; padding: 15px; background: var(--border); border-radius: 8px; text-align: left;">
                         <p style="margin: 5px 0;"><strong>Debug Info:</strong></p>
                         <p style="margin: 5px 0; font-size: 0.9rem;">Server ID: ${guildId}</p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">File totali nella cartella: ${allFiles.length}</p>
-                        <p style="margin: 5px 0; font-size: 0.9rem;">File filtrati: ${serverFiles.length}</p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">Cartella transcript: ${transcriptDir}</p>
+                        <p style="margin: 5px 0; font-size: 0.9rem;">Cartella esistente: ${fs.existsSync(transcriptDir) ? '✅' : '❌'}</p>
                     </div>
                 </div>
             `;
         } else {
-            list = '<div class="error-state">Cartella transcript non trovata.</div>';
+            list = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Cartella transcript non trovata</h3>
+                    <p>La cartella dei transcript non esiste sul server.</p>
+                    <p style="margin-top: 10px; font-size: 0.9rem; color: var(--text-secondary);">
+                        Path: ${transcriptDir}
+                    </p>
+                </div>
+            `;
         }
 
         res.send(`
@@ -1197,6 +1214,20 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             background: var(--primary-dark);
         }
 
+        .btn-copy {
+            background: var(--border);
+            color: var(--text-primary);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .btn-copy:hover {
+            background: var(--primary);
+        }
+
         .btn-back {
             background: var(--border);
             color: var(--text-primary);
@@ -1297,6 +1328,24 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             </a>
         </div>
     </div>
+
+    <script>
+        function copyTranscriptLink(transcriptId) {
+            const link = window.location.origin + '/transcript/' + transcriptId;
+            navigator.clipboard.writeText(link).then(() => {
+                // Mostra feedback
+                const btn = event.target.closest('.btn-copy');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+                btn.style.background = 'var(--success)';
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.background = '';
+                }, 2000);
+            });
+        }
+    </script>
 </body>
 </html>
         `);
