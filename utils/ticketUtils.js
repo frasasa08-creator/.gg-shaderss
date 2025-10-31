@@ -209,20 +209,20 @@ async function closeTicketWithReason(interaction) {
         console.log(`Generazione transcript per ticket ${ticket.id}...`);
         const transcript = await generateOblivionBotTranscript(channel, ticket.id);
         console.log(`Transcript generato.`);
-
-        // === SALVA TRANSCRIPT CON NOME CANALE ===
+        
+        // === SALVA TRANSCRIPT CON NOME CANALE E SERVER ID ===
         const transcriptDir = path.join(__dirname, '..', 'transcripts');
         if (!fs.existsSync(transcriptDir)) {
             fs.mkdirSync(transcriptDir, { recursive: true });
         }
 
-        // NOME UNIVOCO: nome-canale + ID ticket + timestamp
+        // NOME UNIVOCO: nome-canale + ID ticket + timestamp + SERVER ID
         const ticketIdPart = ticket.id.toString().padStart(4, '0');
         const timestamp = Date.now().toString().slice(-6); // ultimi 6 cifre
-        const uniqueName = `${channel.name.toLowerCase().replace(/[^a-z0-9\-]/g, '-')}-${ticketIdPart}-${timestamp}`;
-        const transcriptPath = path.join(transcriptDir, `${uniqueName}.html`);
-        fs.writeFileSync(transcriptPath, transcript.attachment);
-        const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${uniqueName}`;
+        const guildId = interaction.guild.id; // ID del server
+        
+        // FORMATO: ticket-support-username-123456-123456789012345678.html
+        const uniqueName = `ticket-${selectedOption.name.toLowerCase()}-${user.username.toLowerCase()}-${timestamp}-${guildId}`;
 
         // === INVIO DM CON LINK ===
         let ticketCreator = null;
