@@ -138,7 +138,7 @@ module.exports = {
                 .setTitle(title)
                 .setDescription(description)
                 .setColor(color)
-                .setTimestamp()
+                //.setTimestamp()
                 .setFooter({ 
                     text: 'Powered by @sasa1111',
                     iconURL: interaction.guild.iconURL() 
