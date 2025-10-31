@@ -24,7 +24,7 @@ async function createWelcomeEmbed(user, memberCount, welcomeImageUrl, embedColor
             .setDescription(`Welcome ${user} in Shaderss, you're the ${formattedMemberCount} member!`)
             .setImage(welcomeImageUrl)
             .setColor(embedColor)
-            .setTimestamp();
+            //.setTimestamp();
 
         return { embeds: [embed] };
         
