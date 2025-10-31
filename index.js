@@ -426,6 +426,252 @@ function checkStaffRole(req, res, next) {
     }
 }
 
+// === MIDDLEWARE PER VERIFICA STAFF - INTEGRATO CON ALLOWEDROLES ===
+async function checkStaffRole(req, res, next) {
+    if (!req.isAuthenticated()) {
+        console.log('❌ Accesso negato: utente non autenticato');
+        return res.redirect('/auth/discord');
+    }
+
+    try {
+        console.log('👮 Controllo permessi transcript per:', req.user.username);
+        
+        // Owner del bot ha sempre accesso
+        if (process.env.BOT_OWNER_ID && req.user.id === process.env.BOT_OWNER_ID) {
+            console.log('✅ Accesso owner del bot');
+            return next();
+        }
+
+        const userGuilds = req.user.guilds || [];
+        console.log('📋 Server dell\'utente:', userGuilds.map(g => g.name));
+
+        for (const guild of userGuilds) {
+            console.log(`🔍 Controllo server: ${guild.name} (${guild.id})`);
+            
+            // Cerca le impostazioni del server nel database - STESSA QUERY DEL TUO COMANDO
+            const result = await db.query(
+                'SELECT settings FROM guild_settings WHERE guild_id = $1',
+                [guild.id]
+            );
+
+            if (result.rows.length > 0) {
+                const settings = result.rows[0].settings || {};
+                const allowedRoles = settings.allowed_roles || [];
+                
+                console.log(`🎯 Ruoli consentiti in ${guild.name}:`, allowedRoles);
+                
+                if (allowedRoles.length > 0) {
+                    // Controlla se l'utente ha uno dei ruoli consentiti
+                    const userRoles = guild.roles || [];
+                    const hasAllowedRole = userRoles.some(roleId => 
+                        allowedRoles.includes(roleId)
+                    );
+                    
+                    // Controlla se è admin del server
+                    const isAdmin = (guild.permissions & 0x8) === 0x8;
+                    
+                    console.log(`👤 Ruoli utente:`, userRoles);
+                    console.log(`👑 È admin:`, isAdmin);
+                    console.log(`✅ Ha ruolo consentito:`, hasAllowedRole);
+                    
+                    if (hasAllowedRole || isAdmin) {
+                        console.log(`🎉 Accesso CONSENTITO per ${req.user.username} in ${guild.name}`);
+                        return next();
+                    }
+                } else {
+                    console.log('⚠️ Nessun ruolo consentito configurato in questo server');
+                    // Se non ci sono ruoli consentiti, solo gli admin possono accedere
+                    const isAdmin = (guild.permissions & 0x8) === 0x8;
+                    if (isAdmin) {
+                        console.log(`🎉 Accesso CONSENTITO come admin per ${req.user.username} in ${guild.name}`);
+                        return next();
+                    }
+                }
+            } else {
+                console.log('❌ Nessuna impostazione trovata per questo server');
+                // Se non ci sono impostazioni, solo gli admin possono accedere
+                const isAdmin = (guild.permissions & 0x8) === 0x8;
+                if (isAdmin) {
+                    console.log(`🎉 Accesso CONSENTITO come admin per ${req.user.username} in ${guild.name}`);
+                    return next();
+                }
+            }
+        }
+
+        // Se arriva qui, accesso negato
+        console.log('🚫 Accesso NEGATO: nessun ruolo autorizzato trovato');
+        return res.status(403).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Accesso Negato</title>
+                <style>
+                    body { 
+                        background: #1e1f23; 
+                        color: #ed4245; 
+                        font-family: sans-serif; 
+                        text-align: center; 
+                        padding: 100px; 
+                    }
+                    .btn { 
+                        display: inline-block; 
+                        background: #5865F2; 
+                        color: white; 
+                        padding: 10px 20px; 
+                        border-radius: 8px; 
+                        text-decoration: none; 
+                        margin: 10px; 
+                    }
+                    .info-box {
+                        background: #2f3136;
+                        padding: 20px;
+                        border-radius: 8px;
+                        margin: 20px 0;
+                        text-align: left;
+                        max-width: 600px;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+                    .command-example {
+                        background: #36393f;
+                        padding: 10px;
+                        border-radius: 5px;
+                        font-family: monospace;
+                        margin: 10px 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>❌ Accesso Negato ai Transcript</h1>
+                <p>Non hai i permessi necessari per accedere alla sezione transcript.</p>
+                
+                <div class="info-box">
+                    <h3>🔒 Come ottenere l'accesso:</h3>
+                    <p>Per accedere ai transcript, devi avere uno dei <strong>ruoli consentiti</strong> configurati con il comando:</p>
+                    
+                    <div class="command-example">
+                        /allowedroles set ruoli: ID_RUOLO1, ID_RUOLO2
+                    </div>
+                    
+                    <p><strong>Oppure</strong> essere un <strong>amministratore del server</strong> Discord.</p>
+                    
+                    <p><strong>I ruoli consentiti sono gli stessi che possono usare i comandi del bot!</strong></p>
+                    
+                    <p>Contatta un amministratore del server per essere aggiunto ai ruoli autorizzati.</p>
+                </div>
+                
+                <div>
+                    <a href="/" class="btn">🏠 Torna alla Home</a>
+                    <a href="/logout" class="btn">🚪 Logout</a>
+                </div>
+            </body>
+            </html>
+        `);
+
+    } catch (error) {
+        console.error('❌ Errore controllo permessi:', error);
+        return res.status(500).send('Errore interno del server');
+    }
+}
+
+// === ROTTA DEBUG PER VERIFICARE I PERMESSI ===
+app.get('/debug-permissions', async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.redirect('/auth/discord');
+    }
+
+    try {
+        const userInfo = {
+            username: req.user.username,
+            id: req.user.id,
+            guilds: []
+        };
+
+        // Per ogni guild, controlla le impostazioni dal database
+        for (const guild of req.user.guilds || []) {
+            const guildInfo = {
+                id: guild.id,
+                name: guild.name,
+                permissions: guild.permissions,
+                isAdmin: (guild.permissions & 0x8) === 0x8,
+                userRoles: guild.roles || [],
+                settings: null,
+                hasAccess: false
+            };
+
+            // Cerca le impostazioni del server
+            const result = await db.query(
+                'SELECT settings FROM guild_settings WHERE guild_id = $1',
+                [guild.id]
+            );
+
+            if (result.rows.length > 0) {
+                const settings = result.rows[0].settings || {};
+                guildInfo.settings = settings;
+                guildInfo.allowedRoles = settings.allowed_roles || [];
+                
+                // Controlla accesso
+                const hasAllowedRole = guildInfo.userRoles.some(roleId => 
+                    guildInfo.allowedRoles.includes(roleId)
+                );
+                guildInfo.hasAccess = hasAllowedRole || guildInfo.isAdmin;
+            } else {
+                guildInfo.settings = 'Nessuna impostazione trovata';
+                guildInfo.allowedRoles = [];
+                guildInfo.hasAccess = guildInfo.isAdmin; // Solo admin se nessuna impostazione
+            }
+
+            userInfo.guilds.push(guildInfo);
+        }
+
+        // Crea una pagina HTML leggibile
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Debug Permessi</title>
+                <style>
+                    body { background: #1e1f23; color: white; font-family: sans-serif; padding: 20px; }
+                    .guild { background: #2f3136; margin: 10px 0; padding: 15px; border-radius: 8px; }
+                    .has-access { border-left: 5px solid #00ff88; }
+                    .no-access { border-left: 5px solid #ed4245; }
+                    .role { display: inline-block; background: #5865F2; padding: 2px 8px; border-radius: 4px; margin: 2px; font-size: 0.9em; }
+                    .allowed-role { background: #00ff88; color: black; }
+                </style>
+            </head>
+            <body>
+                <h1>🔍 Debug Permessi - ${userInfo.username}</h1>
+                
+                ${userInfo.guilds.map(guild => `
+                    <div class="guild ${guild.hasAccess ? 'has-access' : 'no-access'}">
+                        <h3>${guild.name} ${guild.hasAccess ? '✅' : '❌'}</h3>
+                        <p><strong>ID:</strong> ${guild.id}</p>
+                        <p><strong>Admin:</strong> ${guild.isAdmin ? '✅' : '❌'}</p>
+                        
+                        <p><strong>Ruoli utente:</strong><br>
+                        ${guild.userRoles.map(roleId => `<span class="role">${roleId}</span>`).join('') || 'Nessun ruolo'}</p>
+                        
+                        <p><strong>Ruoli consentiti:</strong><br>
+                        ${guild.allowedRoles ? guild.allowedRoles.map(roleId => 
+                            `<span class="role allowed-role ${guild.userRoles.includes(roleId) ? 'user-has-role' : ''}">${roleId}</span>`
+                        ).join('') : 'Nessun ruolo consentito'}</p>
+                        
+                        <p><strong>Accesso transcript:</strong> ${guild.hasAccess ? '✅ CONSENTITO' : '❌ NEGATO'}</p>
+                    </div>
+                `).join('')}
+                
+                <br>
+                <a href="/" style="color: #5865F2;">← Torna alla Home</a>
+            </body>
+            </html>
+        `);
+
+    } catch (error) {
+        console.error('Errore debug:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // === ROTTA TRANSCRIPT PROTETTA (SOLO STAFF) ===
 app.get('/transcripts', checkStaffRole, (req, res) => {
     const transcriptDir = path.join(__dirname, 'transcripts');
