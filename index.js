@@ -185,7 +185,7 @@ app.get('/', (req, res) => {
   <div class="container">
     <div class="header">
       <h1>.gg/shaderss</h1>
-      <p>Bot Discord • Sempre online • Render Hosted</p>
+      <p>Bot Discord • 24/7 • Render Hosted</p>
     </div>
 
     <div class="grid">
@@ -214,9 +214,9 @@ app.get('/', (req, res) => {
     </div>
 
     <div class="footer">
-      Made with <span style="color:#ff4444;">♥</span> by sasa1111
+      Powered <span style="color:#ff4444;"></span> by @sasa1111
     </div>
-    <div class="refresh">Aggiornamento automatico ogni 10 secondi</div>
+    <div class="refresh"></div>
   </div>
 
   <script>
