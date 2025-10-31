@@ -9,6 +9,7 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
+    cleanupOldTranscripts
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -781,6 +782,5 @@ module.exports = {
     forceCloseTicket,
     generateTranscript,
     generateOblivionBotTranscript,
-    saveTicketMessage,
-    cleanupOldTranscripts 
+    saveTicketMessage
 };
