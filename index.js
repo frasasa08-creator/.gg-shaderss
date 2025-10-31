@@ -549,109 +549,82 @@ async function initDatabase() {
     }
 }
 
-// Deploy comandi slash - PER TUTTI I SERVER SENZA DUPLICATI
-let deployLock = false;
+const { REST, Routes } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+
+let isDeploying = false;
+
 async function deployCommands() {
-    console.log('🔄 [DEPLOY TRACE] deployCommands() chiamato');
-    console.log('🔍 [DEBUG] Server totali:', client.guilds.cache.size);
-    console.log('🔍 [DEBUG] Lista server:', client.guilds.cache.map(g => `${g.name} (${g.id})`).join(', '));
-    
-    // ⬇️⬇️⬇️ LOCK PER EVITARE DUPLICATI ⬇️⬇️⬇️
-    if (deployLock) {
-        console.log('🔒 Deploy già in corso, skipping...');
-        return;
-    }
-    deployLock = true;
+  // Skip se già fatto o disabilitato
+  if (process.env.REGISTER_COMMANDS !== 'true' || isDeploying) {
+    console.log('Deploy comandi SKIPPATO (già fatto o in corso)');
+    return;
+  }
 
+  isDeploying = true;
+  console.log('Inizio registrazione comandi per i 2 server...');
+
+  // Carica comandi
+  const commands = [];
+  const commandsPath = path.join(__dirname, 'commands');
+  const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+
+  for (const file of commandFiles) {
     try {
-        console.log('🔄 Inizio registrazione comandi slash per tutti i server...');
-        
-        const commands = [];
-        const commandsPath = path.join(__dirname, 'commands');
-        const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-        for (const file of commandFiles) {
-            try {
-                const command = require(`./commands/${file}`);
-                
-                if (!command.data) {
-                    console.log(`⚠️ Comando ${file} non ha proprietà data, skipping...`);
-                    continue;
-                }
-                
-                if (typeof command.data.toJSON !== 'function') {
-                    console.log(`⚠️ Comando ${file} data.toJSON non è una funzione, skipping...`);
-                    continue;
-                }
-                
-                commands.push(command.data.toJSON());
-                console.log(`✅ Comando ${command.data.name} caricato`);
-            } catch (error) {
-                console.error(`❌ Errore caricamento comando ${file}:`, error.message);
-            }
-        }
-
-        if (commands.length === 0) {
-            console.log('❌ Nessun comando valido da registrare');
-            return;
-        }
-
-        const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
-        // ⬇️⬇️⬇️ PRIMA PULISCI TUTTI I COMANDI ESISTENTI ⬇️⬇️⬇️
-        console.log('🧹 Pulizia comandi esistenti...');
-        
-        const guilds = client.guilds.cache;
-        let cleanedCount = 0;
-        
-        for (const [guildId, guild] of guilds) {
-            try {
-                // Elimina tutti i comandi esistenti nel server
-                await rest.put(
-                    Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
-                    { body: [] }
-                );
-                console.log(`✅ Comandi puliti in ${guild.name}`);
-                cleanedCount++;
-            } catch (guildError) {
-                console.error(`❌ Errore pulizia comandi in ${guild.name}:`, guildError.message);
-            }
-        }
-
-        console.log(`🧹 Puliti comandi in ${cleanedCount} server`);
-
-        // ⬇️⬇️⬇️ ORA REGISTRA I NUOVI COMANDI ⬇️⬇️⬇️
-        console.log(`📝 Registrazione ${commands.length} comandi in ${guilds.size} server...`);
-        
-        let registeredCount = 0;
-        let totalCommands = 0;
-        
-        for (const [guildId, guild] of guilds) {
-            try {
-                console.log(`🔄 Registrando in: ${guild.name}...`);
-                
-                const data = await rest.put(
-                    Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
-                    { body: commands }
-                );
-                
-                console.log(`✅ ${data.length} comandi registrati in ${guild.name}`);
-                registeredCount++;
-                totalCommands += data.length;
-                
-            } catch (guildError) {
-                console.error(`❌ Errore registrazione in ${guild.name}:`, guildError.message);
-            }
-        }
-        
-        console.log(`🎉 Comandi registrati in ${registeredCount}/${guilds.size} server! Totale: ${totalCommands} registrazioni`);
-        
-    } catch (error) {
-        console.error('❌ Errore registrazione comandi:', error);
-    } finally {
-        deployLock = false;
-        console.log('🔓 Deploy completato');
+      const command = require(`./commands/${file}`);
+      if (command.data?.name) {
+        commands.push(command.data.toJSON());
+      }
+    } catch (err) {
+      console.error(`Errore caricamento comando ${file}:`, err.message);
     }
+  }
+
+  if (commands.length === 0) {
+    console.log('Nessun comando da registrare.');
+    isDeploying = false;
+    return;
+  }
+
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+  // Lista dei tuoi 2 server (da .env o hardcoded)
+  const guildIds = [
+    process.env.GUILD_ID_1,  // Server 1
+    process.env.GUILD_ID_2   // Server 2
+  ].filter(id => id); // rimuovi null/undefined
+
+  if (guildIds.length === 0) {
+    console.log('Nessun GUILD_ID configurato!');
+    isDeploying = false;
+    return;
+  }
+
+  // Registra per ogni server
+  for (const guildId of guildIds) {
+    try {
+      console.log(`Registrazione comandi in ${guildId}...`);
+      await rest.put(
+        Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
+        { body: commands }
+      );
+      console.log(`Comandi registrati in ${guildId}`);
+    } catch (error) {
+      if (error.code === 429) {
+        const wait = (error.retry_after || 10) * 1000;
+        console.log(`Rate limit! Aspetto ${wait/1000}s...`);
+        await new Promise(r => setTimeout(r, wait));
+        // Riprova una volta
+        await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: commands });
+      } else {
+        console.error(`Errore in ${guildId}:`, error.message);
+      }
+    }
+  }
+
+  console.log('Tutti i comandi registrati nei 2 server!');
+  isDeploying = false;
 }
 
 // Gestione riconnessione automatica
