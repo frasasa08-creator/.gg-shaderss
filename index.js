@@ -1,4 +1,4 @@
- // index.js
+// index.js
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');
@@ -200,7 +200,7 @@ app.get('/health', (req, res) => {
     }
 });
 
-// HOMEPAGE CON PULSANTE GRIGIO "Tutti i Transcript"
+// HOMEPAGE MODERNA CON DESIGN AGGIORNATO
 app.get('/', (req, res) => {
     res.send(`
 <!DOCTYPE html>
@@ -208,101 +208,442 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>.gg/shaderss • Status</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>.gg/shaderss • Discord Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; padding:30px; }
-        .container { max-width:900px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
-        header { text-align:center; margin-bottom:30px; }
-        h1 { font-size:2.8em; color:#5865F2; }
-        .tagline { color:#b9bbbe; font-size:1.1em; }
-        .main { display:flex; gap:30px; flex-wrap:wrap; }
-        .status-card, .live-card { flex:1; min-width:300px; background:#2f3136; border-radius:12px; padding:20px; }
-        .status-card h2 { color:#00ff88; margin-bottom:15px; font-size:1.4em; }
-        .info { display:flex; justify-content:space-between; margin:10px 0; font-family:monospace; }
-        .loading { color:#00ff88; animation:pulse 1.5s infinite; }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-        .btn { 
-            display:inline-block; background:#5865F2; color:white; padding:10px 20px; 
-            border-radius:8px; text-decoration:none; font-weight:600; margin:5px; 
-            transition:0.3s; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .btn:hover { background:#4752c4; }
-        .btn-gray { background:#4f545c; }
-        .btn-gray:hover { background:#5f636b; }
-        .live-card h3 { color:#5865F2; margin-bottom:15px; text-align:center; }
-        .members { max-height:300px; overflow-y:auto; }
-        .member { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #40444b; }
-        .member img { width:32px; height:32px; border-radius:50%; }
-        .member span { flex:1; }
-        .member small { color:#72767d; }
-        footer { text-align:center; margin-top:40px; color:#72767d; font-size:0.9em; }
-        .transcript-btn { text-align:center; margin-top:30px; }
+
+        :root {
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --success: #00ff88;
+            --error: #ed4245;
+            --warning: #faa81a;
+            --background: #0f0f12;
+            --card-bg: #1a1a1d;
+            --card-hover: #232327;
+            --text-primary: #ffffff;
+            --text-secondary: #b9bbbe;
+            --text-muted: #72767d;
+            --border: #2f3136;
+            --border-light: #40444b;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, var(--card-bg) 0%, #1e1e22 100%);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .logo {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #9b59b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(88, 101, 242, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-light);
+            transform: translateY(-2px);
+        }
+
+        /* Main Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+            border-color: var(--primary);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+        }
+
+        .card h2 {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2 i {
+            color: var(--primary);
+        }
+
+        /* Status Items */
+        .status-item {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .status-value {
+            font-weight: 600;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+
+        .status-online {
+            color: var(--success);
+        }
+
+        .status-offline {
+            color: var(--error);
+        }
+
+        .status-loading {
+            color: var(--warning);
+        }
+
+        /* Widget Container */
+        .widget-container {
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--border);
+            margin-top: 15px;
+        }
+
+        .widget-container iframe {
+            display: block;
+            border: none;
+        }
+
+        /* Members List */
+        .members-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .member {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .member:hover {
+            background: var(--border);
+        }
+
+        .member-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .member-status {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 30px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+
+        .powered-by {
+            font-size: 0.9rem;
+        }
+
+        .powered-by strong {
+            color: var(--text-secondary);
+        }
+
+        /* Loading Animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite;
+            color: var(--warning);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                padding: 30px 15px;
+            }
+            
+            .logo {
+                font-size: 2.5rem;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 200px;
+                justify-content: center;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-dark);
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>.gg/shaderss</h1>
-            <p class="tagline">Discord Bot • 24/7</p>
-            <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" class="btn">
-                Bot Invite
-            </a>
+        <!-- Header -->
+        <header class="header">
+            <h1 class="logo">.gg/shaderss</h1>
+            <p class="tagline">Discord Bot • 24/7 • Advanced Features</p>
+            <div class="btn-group">
+                <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" class="btn">
+                    <i class="fas fa-robot"></i>Invita Bot
+                </a>
+                <a href="/transcripts" class="btn btn-secondary">
+                    <i class="fas fa-file-alt"></i>Tutti i Transcript
+                </a>
+            </div>
         </header>
 
-        <div class="main">
-            <div class="status-card">
-                <h2>Bot Status</h2>
-                <p><i class="fas fa-circle loading"></i> <strong>Caricamento...</strong></p>
-                <div class="info"><span>Tag:</span> <span id="tag">-</span></div>
-                <div class="info"><span>Server:</span> <span id="guilds">-</span></div>
-                <div class="info"><span>Ping:</span> <span id="ping">-</span>ms</div>
-                <div class="info"><span>Uptime:</span> <span id="uptime">-</span></div>
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Status Card -->
+            <div class="card">
+                <h2><i class="fas fa-heart-pulse"></i> Bot Status</h2>
+                <div class="status-item">
+                    <span class="status-label">Stato</span>
+                    <span class="status-value status-online" id="statusText">ONLINE</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Tag</span>
+                    <span class="status-value" id="tag">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Server</span>
+                    <span class="status-value" id="guilds">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Ping</span>
+                    <span class="status-value" id="ping">- ms</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Uptime</span>
+                    <span class="status-value" id="uptime">-</span>
+                </div>
             </div>
 
-            <!-- WIDGET CARD -->
-              <div class="card">
-                <h3>.gg/shaderss server live</h3>
+            <!-- Discord Widget Card -->
+            <div class="card">
+                <h2><i class="fab fa-discord"></i> Server Live</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 15px; font-size: 0.95rem;">
+                    Unisciti alla nostra community Discord
+                </p>
                 <div class="widget-container">
-                  <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" 
-                          width="100%" height="400" allowtransparency="true" frameborder="0" 
-                          sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
-                          style="border-radius: 8px;"></iframe>
-                <div class="status">
-                    <p><i class="fas fa-circle loading"></i> <strong>Caricamento...</strong></p>
-                    <p>Tag: <span id="tags">-</span> | Server: <span id="guilds">-</span> | Ping: <span id="ping">-</span>ms | Uptime: <span id="uptime">-</span></p>
-         </div>
-
-        <!-- PULSANTE GRIGIO SEMPRE VISIBILE -->
-        <div class="transcript-btn">
-            <a href="/transcripts" class="btn btn-gray">
-                Tutti i Transcript
-            </a>
+                    <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" 
+                            width="100%" height="350" allowtransparency="true" frameborder="0"
+                            sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts">
+                    </iframe>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <footer>
-        <p>Powered by <strong>sasa111</strong></p>
-    </footer>
+        <!-- Additional Info Card -->
+        <div class="card">
+            <h2><i class="fas fa-star"></i> Caratteristiche</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                <div style="text-align: center; padding: 15px; background: var(--border); border-radius: 8px;">
+                    <i class="fas fa-ticket-alt" style="color: var(--primary); font-size: 1.5rem; margin-bottom: 8px;"></i>
+                    <div style="font-weight: 600;">Sistema Ticket</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">Supporto avanzato</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: var(--border); border-radius: 8px;">
+                    <i class="fas fa-shield-alt" style="color: var(--success); font-size: 1.5rem; margin-bottom: 8px;"></i>
+                    <div style="font-weight: 600;">Moderazione</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">Tools completi</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: var(--border); border-radius: 8px;">
+                    <i class="fas fa-bolt" style="color: var(--warning); font-size: 1.5rem; margin-bottom: 8px;"></i>
+                    <div style="font-weight: 600;">24/7 Uptime</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">Sempre online</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p class="powered-by">Powered by <strong>sasa111</strong></p>
+        </footer>
+    </div>
 
     <script>
         async function updateStatus() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
-                document.getElementById('tag').textContent = data.bot.tag.split('#')[0];
-                document.getElementById('guilds').textContent = data.bot.guilds;
-                document.getElementById('ping').textContent = data.bot.ping;
-                document.getElementById('uptime').textContent = data.bot.uptime;
-                document.querySelector('.loading').style.color = '#00ff88';
-                document.querySelector('.loading').textContent = 'ONLINE';
+                
+                if (data.bot.status === 'ONLINE') {
+                    document.getElementById('statusText').className = 'status-value status-online';
+                    document.getElementById('statusText').textContent = 'ONLINE';
+                } else {
+                    document.getElementById('statusText').className = 'status-value status-offline';
+                    document.getElementById('statusText').textContent = 'OFFLINE';
+                }
+                
+                document.getElementById('tag').textContent = data.bot.tag.split('#')[0] || '-';
+                document.getElementById('guilds').textContent = data.bot.guilds || '-';
+                document.getElementById('ping').textContent = data.bot.ping + ' ms' || '- ms';
+                document.getElementById('uptime').textContent = data.bot.uptime || '-';
+                
             } catch(e) {
-                document.querySelector('.loading').style.color = '#ed4245';
-                document.querySelector('.loading').textContent = 'OFFLINE';
+                console.error('Errore aggiornamento status:', e);
+                document.getElementById('statusText').className = 'status-value status-offline';
+                document.getElementById('statusText').textContent = 'OFFLINE';
             }
         }
+
+        // Aggiorna immediatamente e poi ogni 10 secondi
         updateStatus();
         setInterval(updateStatus, 10000);
     </script>
@@ -310,6 +651,7 @@ app.get('/', (req, res) => {
 </html>
     `);
 });
+
 // Avvia server web con error handling
 let server;
 try {
@@ -748,5 +1090,3 @@ app.get('/api/status', (req, res) => {
 });
 
 console.log('File index.js caricato completamente');
-
-console.log('✅ File index.js caricato completamente');
