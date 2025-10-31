@@ -620,19 +620,18 @@ app.get('/api/status', (req, res) => {
         const hours = Math.floor(botUptime / 3600);
         const minutes = Math.floor((botUptime % 3600) / 60);
         const seconds = Math.floor(botUptime % 60);
-       
-        // CONTROLLO STATO REALE DEL BOT
+
         let botStatus = 0;
-        let statusText = '🔴 OFFLINE';
-       
+        let statusText = 'OFFLINE';
+
         if (client && client.isReady()) {
             botStatus = 1;
-            statusText = '🟢 ONLINE';
+            statusText = 'ONLINE';
         } else if (client) {
             botStatus = 2;
-            statusText = '🟠 CONNECTING';
+            statusText = 'CONNECTING';
         }
-       
+
         res.json({
             bot: {
                 status: statusText,
@@ -647,32 +646,38 @@ app.get('/api/status', (req, res) => {
                 wsStatus: client?.ws?.status
             },
             server: {
-                status: '🟢 ONLINE',
+                status: 'ONLINE',
                 uptime: process.uptime(),
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                ping: 'N/A',
+                guilds: 0,
+                tags: 'ticket, support, advanced'
             }
         });
-    } } catch (error) {
-    console.error('Errore in /api/status:', error);
-    res.json({
-        bot: {
-            status: 'OFFLINE',
-            statusCode: 0,
-            tag: 'Errore di connessione',
-            uptime: '0h 0m 0s',
-            guilds: 0,
-            ping: 'N/A',
-            lastUpdate: new Date().toISOString()
-        },
-        server: {
-            status: 'ONLINE',
-            uptime: process.uptime(),
-            timestamp: new Date().toISOString(),
-            ping: 'N/A',
-            guilds: 0,
-            tags: 'ticket, support, advanced'
-        }
-    });
-}
+    } catch (error) {
+        console.error('Errore in /api/status:', error);
+        res.json({
+            bot: {
+                status: 'OFFLINE',
+                statusCode: 0,
+                tag: 'Errore di connessione',
+                uptime: '0h 0m 0s',
+                guilds: 0,
+                ping: 'N/A',
+                lastUpdate: new Date().toISOString()
+            },
+            server: {
+                status: 'ONLINE',
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString(),
+                ping: 'N/A',
+                guilds: 0,
+                tags: 'ticket, support, advanced'
+            }
+        });
+    }
+});
+
+console.log('File index.js caricato completamente');
 
 console.log('✅ File index.js caricato completamente');
