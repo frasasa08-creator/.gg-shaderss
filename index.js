@@ -1671,12 +1671,13 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         /**
          * Elimina un transcript
          */
-        async function deleteTranscript(transcriptName, event) {  // ✅ AGGIUNGI event come parametro
+        async function deleteTranscript(transcriptName, event) {
             if (!confirm('Sei sicuro di voler eliminare questo transcript?\n\n⚠️ Questa azione è irreversibile!')) {
                 return;
             }
         
             try {
+                // ✅ CORRETTO - stringa template fixata
                 const response = await fetch(`/transcript/${transcriptName}`, {
                     method: 'DELETE',
                     headers: {
@@ -1709,13 +1710,47 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 showNotification('❌ Errore di connessione', 'error');
             }
         }
-            
         
         /**
          * Mostra notifica
          */
         function showNotification(message, type = 'info') {
-            // ... codice notifiche che hai già ...
+            // Crea elemento notifica
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 8px;
+                color: white;
+                z-index: 10000;
+                font-weight: 600;
+                font-family: 'Inter', sans-serif;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                transition: all 0.3s ease;
+                ${type === 'success' ? 'background: #00ff88; color: #000;' : ''}
+                ${type === 'error' ? 'background: #ed4245;' : ''}
+                ${type === 'info' ? 'background: #5865F2;' : ''}
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // Animazione entrata
+            setTimeout(() => {
+                notification.style.transform = 'translateX(0)';
+            }, 10);
+            
+            // Rimuovi dopo 5 secondi
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100px)';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
         }
         
         /**
@@ -1725,7 +1760,6 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             const items = document.querySelectorAll('.transcript-item');
             const countElement = document.querySelector('.transcript-stats .stat:first-child');
             if (countElement) {
-                const countText = countElement.textContent;
                 const newCount = items.length;
                 countElement.innerHTML = `<i class="fas fa-folder"></i> ${newCount} transcript trovati`;
             }
