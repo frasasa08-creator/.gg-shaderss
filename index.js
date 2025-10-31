@@ -552,16 +552,14 @@ async function initDatabase() {
 let isDeploying = false;
 
 async function deployCommands() {
-  // Skip se disabilitato o già in corso
   if (process.env.REGISTER_COMMANDS !== 'true' || isDeploying) {
-    console.log('Deploy comandi SKIPPATO (REGISTER_COMMANDS=false o in corso)');
+    console.log('⏭️ Deploy SKIPPATO');
     return;
   }
 
   isDeploying = true;
-  console.log('Inizio deploy comandi nei 2 server...');
+  console.log('🚀 Inizio DEPLOY GLOBALE dei comandi...');
 
-  // === CARICA COMANDI ===
   const commands = [];
   const commandsPath = path.join(__dirname, 'commands');
   const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
@@ -574,75 +572,39 @@ async function deployCommands() {
         commands.push(command.data.toJSON());
       }
     } catch (err) {
-      console.error(`Errore caricamento comando ${file}:`, err.message);
+      console.error(`❌ Errore comando ${file}:`, err.message);
     }
   }
 
   if (commands.length === 0) {
-    console.log('Nessun comando da registrare.');
+    console.log('⚠️ Nessun comando da registrare');
     isDeploying = false;
     return;
   }
 
-  console.log(`${commands.length} comandi caricati: ${commands.map(c => c.name).join(', ')}`);
+  console.log(`📦 ${commands.length} comandi caricati`);
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  // === GUILD IDs ===
-  const guildIds = [
-    process.env.GUILD_ID_1,
-    process.env.GUILD_ID_2
-  ].filter(id => id && id.trim() !== '');
-
-  if (guildIds.length === 0) {
-    console.log('Nessun GUILD_ID configurato in .env!');
-    isDeploying = false;
-    return;
-  }
-
-  // === REGISTRA PER OGNI SERVER ===
-  for (const guildId of guildIds) {
-    console.log(`\nRegistrazione comandi in server: ${guildId}`);
-
-    try {
-      const data = await rest.put(
-        Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
-        { body: commands }
-      );
-
-      console.log(`${data.length} comandi registrati con successo in ${guildId}`);
-    } catch (error) {
-      console.error(`\nFALLITO DEPLOY in server ${guildId}`);
-
-      if (error.code) {
-        console.error(`   → Codice errore: ${error.code}`);
-        if (error.code === 50001) {
-          console.error(`   → Il bot NON ha permessi 'Use Application Commands'`);
-          console.error(`   → Reinvita con: bot + applications.commands + Administrator`);
-        }
-        if (error.code === 50013) {
-          console.error(`   → Permessi insufficienti (non admin)`);
-        }
-      }
-
-      console.error(`   → Messaggio: ${error.message}`);
-      if (error.status) console.error(`   → HTTP Status: ${error.status}`);
-
-      if (error.code === 429) {
-        const wait = (error.retry_after || 10) * 1000;
-        console.log(`Rate limit! Aspetto ${wait / 1000}s...`);
-        await new Promise(r => setTimeout(r, wait));
-        try {
-          await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: commands });
-          console.log(`Retry riuscito in ${guildId}`);
-        } catch (retryError) {
-          console.error(`Anche il retry fallito in ${guildId}`);
-        }
-      }
+  try {
+    console.log('🔄 Registrazione comandi GLOBALI...');
+    const data = await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+    console.log(`✅ ${data.length} comandi registrati GLOBALMENTE!`);
+    console.log(`   → Disponibili in TUTTI i server (anche Server 2)`);
+  } catch (error) {
+    console.error('❌ ERRORE DEPLOY GLOBALE:');
+    console.error(`   → Codice: ${error.code}`);
+    console.error(`   → Messaggio: ${error.message}`);
+    if (error.code === 50001) {
+      console.error(`   → Il bot NON ha 'applications.commands' in nessun server`);
+      console.error(`   → Vai su Developer Portal → OAuth2 → URL Generator → Aggiungi 'applications.commands'`);
     }
   }
 
-  console.log('\nDeploy completato per tutti i server!');
+  console.log('🎉 Deploy globale completato!');
   isDeploying = false;
 }
 
