@@ -29,7 +29,7 @@ try {
  */
 async function createTicket(interaction, optionValue) {
     try {
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({ ephemeral: true });
         const guild = interaction.guild;
         const user = interaction.user;
 
