@@ -9,7 +9,7 @@ function createVerifyEmbed(title, description, imageUrl, color = 0x0099FF) {
         .setDescription(description)
         .setImage(imageUrl)
         .setColor(color)
-        .setTimestamp();
+        //.setTimestamp();
 
     return embed;
 }
