@@ -1,4 +1,4 @@
-// index.js
+gett// index.js
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');
@@ -421,168 +421,17 @@ app.get('/transcript/:identifier', (req, res) => {
         return res.sendFile(exactPath);
     }
     
-    // Se non trova il file, mostra tutti i file disponibili per debug
-    try {
-        const allFiles = fs.readdirSync(transcriptDir)
-            .filter(f => f.endsWith('.html') && f !== '.gitkeep');
-        
-        console.log(`📁 File disponibili nella cartella:`, allFiles);
-        
-        // Crea un transcript di test se non ci sono file
-        if (allFiles.length === 0) {
-            console.log('🛠️ Creo transcript di test...');
-            const testTranscript = `
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript di Test - ${identifier}</title>
-    <style>
-        body { 
-            background: #36393f; 
-            color: #ffffff; 
-            font-family: 'Segoe UI', sans-serif; 
-            padding: 20px; 
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        .header { 
-            background: #2f3136; 
-            padding: 25px; 
-            border-radius: 10px; 
-            margin-bottom: 20px; 
-            border-left: 5px solid #5865F2;
-        }
-        .message { 
-            background: #40444b; 
-            padding: 15px; 
-            border-radius: 8px; 
-            margin: 10px 0; 
-            border-left: 3px solid #5865F2;
-        }
-        .user-message { 
-            background: #2f3136; 
-            margin-left: 50px;
-        }
-        .staff-message { 
-            background: #4f545c; 
-            margin-right: 50px;
-        }
-        .timestamp {
-            color: #72767d;
-            font-size: 0.8em;
-            margin-top: 5px;
-        }
-        .debug-info {
-            background: #2f3136;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 30px;
-            border: 1px solid #5865F2;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🎫 Transcript di Test</h1>
-        <p><strong>Ticket ID:</strong> ${identifier}</p>
-        <p><strong>Data:</strong> ${new Date().toLocaleString('it-IT')}</p>
-        <p>Questo è un transcript di prova generato automaticamente dal sistema.</p>
-    </div>
+    // === SE IL FILE NON ESISTE (ELIMINATO) ===
+    console.log(`❌ Transcript eliminato/non trovato: ${identifier}`);
     
-    <div class="message user-message">
-        <strong>👤 User123:</strong> Ciao, ho bisogno di aiuto con il prodotto!
-        <div class="timestamp">${new Date(Date.now() - 3600000).toLocaleString('it-IT')}</div>
-    </div>
-    
-    <div class="message staff-message">
-        <strong>🛡️ Staff Member:</strong> Ciao! Sono qui per aiutarti. Qual è il problema?
-        <div class="timestamp">${new Date(Date.now() - 3000000).toLocaleString('it-IT')}</div>
-    </div>
-    
-    <div class="message user-message">
-        <strong>👤 User123:</strong> Non riesco ad accedere al mio account.
-        <div class="timestamp">${new Date(Date.now() - 2400000).toLocaleString('it-IT')}</div>
-    </div>
-    
-    <div class="message staff-message">
-        <strong>🛡️ Staff Member:</strong> Prova a resettare la password dal link "Password dimenticata".
-        <div class="timestamp">${new Date(Date.now() - 1800000).toLocaleString('it-IT')}</div>
-    </div>
-    
-    <div class="message user-message">
-        <strong>👤 User123:</strong> Funziona! Grazie mille per l'aiuto!
-        <div class="timestamp">${new Date(Date.now() - 600000).toLocaleString('it-IT')}</div>
-    </div>
-    
-    <div class="message staff-message">
-        <strong>🛡️ Staff Member:</strong> Di nulla! Buona giornata! 🎉
-        <div class="timestamp">${new Date().toLocaleString('it-IT')}</div>
-    </div>
-    
-    <div class="debug-info">
-        <h3>🔧 Informazioni di Debug</h3>
-        <p><strong>Ticket Identifier:</strong> ${identifier}</p>
-        <p><strong>Cartella Transcripts:</strong> ${transcriptDir}</p>
-        <p><strong>File Creato:</strong> ${identifier}.html</p>
-        <p><strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}</p>
-        <p><strong>Data Generazione:</strong> ${new Date().toLocaleString('it-IT')}</p>
-        <p><em>Questo transcript è stato generato automaticamente per testare il sistema.</em></p>
-    </div>
-</body>
-</html>`;
-            
-            const testFilePath = path.join(transcriptDir, `${identifier}.html`);
-            fs.writeFileSync(testFilePath, testTranscript);
-            console.log(`✅ Transcript di test creato: ${identifier}.html`);
-            
-            res.setHeader('Content-Type', 'text/html');
-            return res.send(testTranscript);
-        }
-        
-        // Cerca file che contengono l'identifier nel nome
-        const matchingFiles = allFiles.filter(file => {
-            const fileNameWithoutExt = file.replace('.html', '').toLowerCase();
-            return fileNameWithoutExt.includes(identifier) || identifier.includes(fileNameWithoutExt);
-        });
-        
-        if (matchingFiles.length > 0) {
-            console.log(`✅ Transcript trovato con match parziale: ${matchingFiles[0]}`);
-            const filePath = path.join(transcriptDir, matchingFiles[0]);
-            res.setHeader('Content-Type', 'text/html');
-            return res.sendFile(filePath);
-        }
-        
-        console.log(`❌ Nessun transcript trovato per: ${identifier}`);
-        
-    } catch (error) {
-        console.error('Errore ricerca transcript:', error);
-    }
-
-    // Mostra pagina di errore con più dettagli
-    let folderInfo = 'Cartella non esistente';
-    let fileCount = 0;
-    let allFilesList = [];
-    
-    try {
-        if (fs.existsSync(transcriptDir)) {
-            folderInfo = 'Cartella esistente';
-            const files = fs.readdirSync(transcriptDir);
-            fileCount = files.filter(f => f.endsWith('.html')).length;
-            allFilesList = files.filter(f => f.endsWith('.html'));
-        }
-    } catch (e) {
-        folderInfo = `Errore accesso: ${e.message}`;
-    }
-
+    // Mostra pagina di errore specifica per transcript eliminato
     res.status(404).send(`
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript non trovato</title>
+    <title>Transcript Eliminato</title>
     <style>
         body { 
             background: #1e1f23; 
@@ -592,7 +441,7 @@ app.get('/transcript/:identifier', (req, res) => {
             padding: 50px; 
         }
         h1 { color: #ed4245; }
-        p { font-size: 1.2em; }
+        p { font-size: 1.2em; margin-bottom: 20px; }
         .discord { color: #5865F2; }
         .debug { 
             background: #2f3136; 
@@ -604,13 +453,6 @@ app.get('/transcript/:identifier', (req, res) => {
             max-width: 800px;
             margin-left: auto;
             margin-right: auto;
-        }
-        .file-list {
-            background: #36393f;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
-            text-align: left;
         }
         .btn {
             display: inline-block;
@@ -627,44 +469,53 @@ app.get('/transcript/:identifier', (req, res) => {
             background: #4752c4;
             transform: translateY(-2px);
         }
-        .btn-test {
-            background: #00ff88;
-            color: #000;
+        .btn-secondary {
+            background: #2f3136;
+            color: #b9bbbe;
         }
-        .btn-test:hover {
-            background: #00cc6a;
+        .btn-secondary:hover {
+            background: #40444b;
+        }
+        .warning {
+            background: #faa81a;
+            color: #000;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 600;
         }
     </style>
 </head>
 <body>
-    <h1>📄 Transcript non trovato</h1>
-    <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
+    <h1>🗑️ Transcript Eliminato</h1>
+    
+    <div class="warning">
+        ⚠️ Questo transcript è stato eliminato e non è più disponibile
+    </div>
+    
+    <p>Il ticket <span class="discord">#${identifier}</span> è stato eliminato dal sistema.</p>
     
     <div class="debug">
-        <strong>🔧 Informazioni di Debug:</strong><br><br>
-        <strong>Identifier cercato:</strong> ${identifier}<br>
-        <strong>Cartella transcripts:</strong> ${transcriptDir}<br>
-        <strong>Stato cartella:</strong> ${folderInfo}<br>
-        <strong>File .html trovati:</strong> ${fileCount}<br>
+        <strong>🔧 Informazioni:</strong><br><br>
+        <strong>Identifier:</strong> ${identifier}<br>
+        <strong>Stato:</strong> ELIMINATO<br>
         <strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}<br>
-        <strong>Tempo:</strong> ${new Date().toLocaleString('it-IT')}<br><br>
+        <strong>Tempo:</strong> ${new Date().toLocaleString('it-IT')}<br>
+        <strong>Motivo:</strong> Transcript eliminato manualmente o scaduto<br><br>
         
-        <strong>📁 File disponibili:</strong>
-        <div class="file-list">
-            ${allFilesList.length > 0 ? allFilesList.map(file => `• ${file}`).join('<br>') : 'Nessun file transcript trovato'}
-        </div>
+        <em>I transcript vengono automaticamente eliminati dopo 7 giorni dalla chiusura del ticket.</em>
     </div>
 
     <div style="margin-top: 30px;">
-        <a href="/transcript/${identifier}" class="btn btn-test">🛠️ Crea Transcript di Test</a>
-        <a href="/transcripts" class="btn">📂 Vedi tutti i transcript</a>
-        <a href="/" class="btn">🏠 Torna alla Home</a>
+        <a href="/transcripts" class="btn">📂 Vedi Transcript Disponibili</a>
+        <a href="/" class="btn btn-secondary">🏠 Torna alla Home</a>
     </div>
 
     <div style="margin-top: 40px; padding: 20px; background: #2f3136; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
-        <h3>💡 Cosa fare?</h3>
-        <p>Se stai testando il sistema, clicca "Crea Transcript di Test" per generare un transcript di esempio.</p>
-        <p>Se questo è un ticket reale, verifica che il sistema di creazione transcript sia configurato correttamente.</p>
+        <h3>💡 Informazioni</h3>
+        <p>I transcript dei ticket vengono conservati per <strong>7 giorni</strong> dalla chiusura.</p>
+        <p>Dopo questo periodo, vengono automaticamente eliminati per ottimizzare lo spazio.</p>
+        <p>Se hai bisogno di conservare un transcript, scaricalo prima della scadenza.</p>
     </div>
 </body>
 </html>
@@ -1775,7 +1626,7 @@ app.delete('/transcript/:filename', checkStaffRole, async (req, res) => {
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({ 
                 success: false, 
-                message: 'Transcript non trovato' 
+                message: 'Transcript non trovato - potrebbe essere già stato eliminato' 
             });
         }
 
@@ -1794,7 +1645,7 @@ app.delete('/transcript/:filename', checkStaffRole, async (req, res) => {
 
         res.json({ 
             success: true, 
-            message: 'Transcript eliminato con successo',
+            message: 'Transcript eliminato con successo. Il link non sarà più accessibile.',
             deletedFile: filename
         });
 
