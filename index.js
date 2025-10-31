@@ -58,17 +58,15 @@ app.get('/transcript/:identifier', (req, res) => {
 });
 
 // === PROTEZIONE STAFF PER /transcripts ===
-app.get('/transcripts', async (req, res) => {
-    const auth = req.headers.authorization;
-    if (!auth || auth !== `Bearer ${process.env.STAFF_TOKEN}`) {
+app.get('/transcripts', (req, res) => {
+    const token = req.query.token;
+    if (!token || token !== process.env.STAFF_TOKEN) {
         return res.status(403).send(`
 <!DOCTYPE html>
 <html><head><title>Accesso Negato</title>
-<style>body{background:#1e1f23;color:#fff;font-family:sans-serif;text-align:center;padding:100px;}
-h1{color:#ed4245;}</style></head>
-<body><h1>Accesso Negato</h1>
-<p>Solo lo staff può vedere questa pagina.</p>
-</body></html>
+<style>body{background:#1e1f23;color:#ed4245;font-family:sans-serif;text-align:center;padding:100px;}
+h1{font-size:3em;}</style></head>
+<body><h1>Accesso Negato</h1><p>Solo lo staff può accedere.</p></body></html>
         `);
     }
 
