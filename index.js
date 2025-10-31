@@ -1868,7 +1868,7 @@ app.get('/', (req, res) => {
             <p class="tagline">Discord Bot • 24/7 • Advanced Features</p>
             <div class="btn-group">
                 <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" class="btn">
-                    <i class="fas fa-robot"></i>Invita Bot
+                    <i class="fas fa-robot"></i> Invita Bot
                 </a>
             </div>
         </header>
@@ -1937,7 +1937,7 @@ app.get('/', (req, res) => {
             </div>
         </div>
 
-                <!-- Footer -->
+        <!-- Footer -->
         <footer class="footer">
             <p class="powered-by">Powered by <strong>sasa111</strong></p>
         </footer>
@@ -1952,7 +1952,7 @@ app.get('/', (req, res) => {
                 
                 // Aggiorna i valori nella pagina
                 document.getElementById('statusText').textContent = data.bot.status;
-                document.getElementById('statusText').className = `status-value status-${data.bot.status.toLowerCase()}`;
+                document.getElementById('statusText').className = 'status-value status-' + data.bot.status.toLowerCase();
                 document.getElementById('tag').textContent = data.bot.tag;
                 document.getElementById('guilds').textContent = data.bot.guilds;
                 document.getElementById('ping').textContent = data.bot.ping + ' ms';
