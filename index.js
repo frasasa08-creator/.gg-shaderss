@@ -29,29 +29,32 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session middleware
+// Configurazione session con opzioni specifiche per Render
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-    resave: false,
-    saveUninitialized: false,
+    resave: true, // Cambiato a true per Render
+    saveUninitialized: true, // Cambiato a true
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000
-    }
+        maxAge: 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        sameSite: 'lax'
+    },
+    name: 'gg-shaderss.sid' // Nome specifico per il cookie
 }));
 
 // Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
 
-// DEBUG: Log delle variabili d'ambiente (rimuovi in produzione)
+// DEBUG: Log delle variabili d'ambiente
 console.log('🔧 DEBUG Variabili OAuth:');
 console.log('CLIENT_ID:', process.env.CLIENT_ID ? 'Presente' : 'Mancante');
 console.log('DISCORD_CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? 'Presente' : 'Mancante');
 console.log('RENDER_EXTERNAL_URL:', process.env.RENDER_EXTERNAL_URL || 'Non impostato');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'Non impostato');
 
-// Configurazione Passport con URL dinamico e debugging
+// Configurazione Passport con URL dinamico
 const getCallbackURL = () => {
     let callbackURL;
     
@@ -67,8 +70,8 @@ const getCallbackURL = () => {
     return callbackURL;
 };
 
-// Configurazione DiscordStrategy con error handling migliorato
-const strategy = new DiscordStrategy({
+// Configurazione DiscordStrategy
+passport.use(new DiscordStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
     callbackURL: getCallbackURL(),
@@ -83,43 +86,12 @@ const strategy = new DiscordStrategy({
             guilds: profile.guilds ? profile.guilds.length : 0
         });
         
-        // Aggiungi i guilds al profile per i controlli staff
-        if (profile.guilds) {
-            profile.guilds = profile.guilds;
-        }
-        
         return done(null, profile);
     } catch (error) {
         console.error('❌ Errore durante autenticazione:', error);
         return done(error, null);
     }
-});
-
-// Aggiungi logging per gli eventi della strategy
-strategy._oauth2.setAuthMethod('Bearer');
-strategy._oauth2._useAuthorizationHeaderForGET = true;
-
-// Override della funzione per il token per aggiungere logging
-const originalGetOAuthAccessToken = strategy._oauth2.getOAuthAccessToken.bind(strategy._oauth2);
-strategy._oauth2.getOAuthAccessToken = function(code, params, callback) {
-    console.log('🔄 Richiesta token OAuth con codice:', code ? 'Presente' : 'Mancante');
-    console.log('🔗 URL token:', this._getAccessTokenUrl());
-    
-    return originalGetOAuthAccessToken(code, params, function(err, accessToken, refreshToken, params) {
-        if (err) {
-            console.error('❌ Errore ottenimento token OAuth:', err);
-            console.error('❌ Dettagli errore:', {
-                statusCode: err.statusCode,
-                data: err.data
-            });
-        } else {
-            console.log('✅ Token OAuth ottenuto con successo');
-        }
-        callback(err, accessToken, refreshToken, params);
-    });
-};
-
-passport.use(strategy);
+}));
 
 // Serializzazione e deserializzazione
 passport.serializeUser((user, done) => {
@@ -134,16 +106,18 @@ passport.deserializeUser((user, done) => {
 
 // === MIDDLEWARE DI AUTENTICAZIONE GLOBALE ===
 function requireAuth(req, res, next) {
-    const publicRoutes = ['/auth/discord', '/auth/discord/callback', '/auth/failure', '/health', '/api/status'];
+    const publicRoutes = ['/auth/discord', '/auth/discord/callback', '/auth/failure', '/health', '/api/status', '/'];
     
     if (publicRoutes.includes(req.path)) {
         return next();
     }
     
     if (req.isAuthenticated()) {
+        console.log('✅ Utente autenticato:', req.user.username);
         return next();
     }
     
+    console.log('❌ Utente NON autenticato, redirect a login');
     req.session.returnTo = req.originalUrl;
     res.redirect('/auth/discord');
 }
@@ -153,16 +127,15 @@ app.use(requireAuth);
 
 // === ROTTE DI AUTENTICAZIONE ===
 app.get('/auth/discord', (req, res, next) => {
-    console.log('🚀 Inizio autenticazione OAuth');
-    console.log('🔗 Redirect a Discord OAuth');
+    console.log('🚀 Inizio autenticazione OAuth per:', req.user?.username || 'Utente non loggato');
     passport.authenticate('discord')(req, res, next);
 });
 
 app.get('/auth/discord/callback',
     (req, res, next) => {
         console.log('🔄 Callback OAuth ricevuto');
-        console.log('📊 Query parameters:', req.query);
-        console.log('❌ Error parameter:', req.query.error);
+        console.log('📊 Session ID:', req.sessionID);
+        console.log('👤 Utente prima auth:', req.user?.username || 'Nessuno');
         
         passport.authenticate('discord', { 
             failureRedirect: '/auth/failure',
@@ -171,11 +144,25 @@ app.get('/auth/discord/callback',
     },
     (req, res) => {
         console.log('✅ Autenticazione completata per:', req.user.username);
+        console.log('📋 Session dopo auth:', req.sessionID);
+        console.log('👤 User dopo auth:', req.user.username);
+        
         const returnTo = req.session.returnTo || '/';
         delete req.session.returnTo;
+        
+        console.log('🔀 Redirect a:', returnTo);
         res.redirect(returnTo);
     }
 );
+
+// Middleware per debugging session
+app.use((req, res, next) => {
+    console.log('🔍 Debug Session - Path:', req.path);
+    console.log('🔍 Debug Session - Authenticated:', req.isAuthenticated());
+    console.log('🔍 Debug Session - User:', req.user?.username || 'Nessuno');
+    console.log('🔍 Debug Session - Session ID:', req.sessionID);
+    next();
+});
 
 // Middleware per gestire errori
 app.use((err, req, res, next) => {
@@ -201,13 +188,6 @@ app.use((err, req, res, next) => {
                 ${err.message || 'Errore sconosciuto'}
             </div>
             
-            <p>Verifica che:</p>
-            <ul style="text-align: left; display: inline-block;">
-                <li>Le variabili d'ambiente siano configurate correttamente</li>
-                <li>Il Client Secret sia valido</li>
-                <li>Il Callback URL sia impostato correttamente nel Discord Developer Portal</li>
-            </ul>
-            <br>
             <a href="/auth/discord" class="btn">Riprova Login</a>
             <a href="/" class="btn">Torna alla Home</a>
         </body>
@@ -242,13 +222,6 @@ app.get('/auth/failure', (req, res) => {
                 Descrizione: ${errorDescription}
             </div>
             
-            <p>Verifica che:</p>
-            <ul style="text-align: left; display: inline-block;">
-                <li>Il bot sia invitato nel server</li>
-                <li>I permessi OAuth siano configurati correttamente</li>
-                <li>Il callback URL sia impostato correttamente nel Discord Developer Portal</li>
-            </ul>
-            <br>
             <a href="/auth/discord" class="btn">Riprova Login</a>
             <a href="/" class="btn">Torna alla Home</a>
         </body>
@@ -262,74 +235,14 @@ app.get('/logout', (req, res) => {
         if (err) {
             console.error('Logout error:', err);
         }
-        req.session.destroy(() => {
-            res.redirect('/auth/discord');
+        req.session.destroy((err) => {
+            if (err) {
+                console.error('Session destroy error:', err);
+            }
+            res.redirect('/');
         });
     });
 });
-
-// ... (il resto del codice rimane uguale, mantenendo tutte le altre route e funzionalità)
-
-// === MIDDLEWARE PER VERIFICA STAFF ===
-function checkStaffRole(req, res, next) {
-    if (!req.isAuthenticated()) {
-        return res.redirect('/auth/discord');
-    }
-
-    const allowedGuilds = process.env.ALLOWED_GUILDS ? process.env.ALLOWED_GUILDS.split(',') : [];
-    const staffRoleIds = process.env.STAFF_ROLE_IDS ? process.env.STAFF_ROLE_IDS.split(',') : [];
-    
-    console.log('👮 Controllo permessi staff per:', req.user.username);
-    console.log('🏠 Server consentiti:', allowedGuilds);
-    console.log('🎯 Ruoli staff:', staffRoleIds);
-    
-    const userGuilds = req.user.guilds || [];
-    console.log('📋 Server utente:', userGuilds.map(g => ({ id: g.id, name: g.name, permissions: g.permissions })));
-    
-    const hasAccess = userGuilds.some(guild => {
-        const hasGuildAccess = allowedGuilds.includes(guild.id);
-        const hasStaffRole = staffRoleIds.some(roleId => 
-            guild.roles && guild.roles.includes(roleId)
-        );
-        const isAdmin = (guild.permissions & 0x8) === 0x8;
-        
-        console.log(`🔍 Controllo server ${guild.id}:`, {
-            hasGuildAccess,
-            hasStaffRole,
-            isAdmin,
-            permissions: guild.permissions
-        });
-        
-        return hasGuildAccess && (hasStaffRole || isAdmin);
-    });
-
-    if (hasAccess) {
-        console.log('✅ Accesso staff consentito');
-        return next();
-    } else {
-        console.log('❌ Accesso staff negato');
-        return res.status(403).send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Accesso Negato</title>
-                <style>
-                    body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
-                    .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
-                           border-radius: 8px; text-decoration: none; margin: 10px; }
-                </style>
-            </head>
-            <body>
-                <h1>❌ Accesso Negato ai Transcript</h1>
-                <p>Non hai i permessi staff necessari per accedere ai transcript.</p>
-                <p>Contatta un amministratore se pensi sia un errore.</p>
-                <a href="/" class="btn">Torna alla Home</a>
-                <a href="/logout" class="btn">Logout</a>
-            </body>
-            </html>
-        `);
-    }
-}
 
 // === ROTTE PUBBLICHE ===
 app.get('/health', (req, res) => {
@@ -412,8 +325,6 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// ... (mantieni tutto il resto del codice per transcripts, homepage, etc.)
-
 // === ROTTA TRANSCRIPT ONLINE ===
 app.get('/transcript/:identifier', (req, res) => {
     const identifier = req.params.identifier.toLowerCase();
@@ -442,11 +353,59 @@ app.get('/transcript/:identifier', (req, res) => {
 <body>
     <h1>Transcript non trovato</h1>
     <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
-    <p>Torna tra 7 giorni? No, è già andato.</p>
 </body>
 </html>
     `);
 });
+
+// === MIDDLEWARE PER VERIFICA STAFF ===
+function checkStaffRole(req, res, next) {
+    if (!req.isAuthenticated()) {
+        return res.redirect('/auth/discord');
+    }
+
+    const allowedGuilds = process.env.ALLOWED_GUILDS ? process.env.ALLOWED_GUILDS.split(',') : [];
+    const staffRoleIds = process.env.STAFF_ROLE_IDS ? process.env.STAFF_ROLE_IDS.split(',') : [];
+    
+    console.log('👮 Controllo permessi staff per:', req.user.username);
+    
+    const userGuilds = req.user.guilds || [];
+    const hasAccess = userGuilds.some(guild => {
+        const hasGuildAccess = allowedGuilds.includes(guild.id);
+        const hasStaffRole = staffRoleIds.some(roleId => 
+            guild.roles && guild.roles.includes(roleId)
+        );
+        const isAdmin = (guild.permissions & 0x8) === 0x8;
+        
+        return hasGuildAccess && (hasStaffRole || isAdmin);
+    });
+
+    if (hasAccess) {
+        console.log('✅ Accesso staff consentito');
+        return next();
+    } else {
+        console.log('❌ Accesso staff negato');
+        return res.status(403).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Accesso Negato</title>
+                <style>
+                    body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                    .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
+                           border-radius: 8px; text-decoration: none; margin: 10px; }
+                </style>
+            </head>
+            <body>
+                <h1>❌ Accesso Negato</h1>
+                <p>Non hai i permessi necessari per accedere a questa pagina.</p>
+                <a href="/" class="btn">Torna alla Home</a>
+                <a href="/logout" class="btn">Logout</a>
+            </body>
+            </html>
+        `);
+    }
+}
 
 // === ROTTA TRANSCRIPT PROTETTA (SOLO STAFF) ===
 app.get('/transcripts', checkStaffRole, (req, res) => {
@@ -762,8 +721,10 @@ app.get('/transcripts', checkStaffRole, (req, res) => {
     `);
 });
 
-// === HOMEPAGE MODERNA (protetta) ===
+// === HOMEPAGE MODERNA ===
 app.get('/', (req, res) => {
+    console.log('🏠 Homepage richiesta - Utente autenticato:', req.isAuthenticated());
+    
     if (!req.isAuthenticated()) {
         return res.redirect('/auth/discord');
     }
@@ -814,7 +775,6 @@ app.get('/', (req, res) => {
             margin: 0 auto;
         }
 
-        /* Header con info utente */
         .user-header {
             display: flex;
             justify-content: space-between;
@@ -1155,7 +1115,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Avvia server web con error handling
+// Avvia server web
 let server;
 try {
     server = app.listen(PORT, '0.0.0.0', () => {
@@ -1164,8 +1124,9 @@ try {
     });
 } catch (error) {
     console.error('❌ Errore avvio server web:', error);
-    console.log('⚠️ Server web non avviato, ma bot Discord funziona');
 }
+
+// ... (il resto del codice per Discord bot, comandi, eventi, database rimane uguale)
 
 // Collezioni comandi e cooldown
 client.commands = new Collection();
@@ -1198,6 +1159,7 @@ for (const file of eventFiles) {
 // Gestione interazioni
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand() && !interaction.isStringSelectMenu() && !interaction.isButton() && !interaction.isModalSubmit()) return;
+    
     if (interaction.isCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
@@ -1205,93 +1167,46 @@ client.on('interactionCreate', async interaction => {
             await command.execute(interaction);
         } catch (error) {
             console.error(`Errore eseguendo ${interaction.commandName}:`, error);
-           
-            if (error.code === 'InteractionNotReplied') {
-                try {
+            try {
+                if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({
-                        content: '❌ Errore: Interaction già processata',
+                        content: '❌ Si è verificato un errore eseguendo questo comando!',
                         flags: 64
                     });
-                } catch (replyError) {
-                    console.log('⚠️ Impossibile rispondere all\'interaction');
                 }
-            } else if (error.code === 10062) {
-                console.log('⚠️ Interaction sconosciuta, ignorando......');
-            } else {
-                try {
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: '❌ Si è verificato un errore eseguendo questo comando!',
-                            flags: 64
-                        });
-                    }
-                } catch (replyError) {
-                    console.log('⚠️ Impossibile rispondere all\'interaction');
-                }
+            } catch (replyError) {
+                console.log('⚠️ Impossibile rispondere all\'interaction');
             }
         }
     }
+    
     // Gestione menu select per ticket
-    if (interaction.isStringSelectMenu()) {
-        if (interaction.customId === 'ticket_select') {
-            try {
-                const { createTicket } = require('./utils/ticketUtils');
-                await createTicket(interaction, interaction.values[0]);
-            } catch (error) {
-                console.error('Errore creazione ticket:', error);
-                if (!interaction.replied && !interaction.deferred) {
-                    try {
-                        await interaction.reply({
-                            content: '❌ Errore durante la creazione del ticket!',
-                            flags: 64
-                        });
-                    } catch (replyError) {
-                        console.log('⚠️ Impossibile rispondere all\'interaction');
-                    }
-                }
-            }
+    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
+        try {
+            const { createTicket } = require('./utils/ticketUtils');
+            await createTicket(interaction, interaction.values[0]);
+        } catch (error) {
+            console.error('Errore creazione ticket:', error);
         }
     }
+    
     // Gestione bottone per chiudere ticket
-    if (interaction.isButton()) {
-        if (interaction.customId === 'close_ticket') {
-            try {
-                const { showCloseTicketModal } = require('./utils/ticketUtils');
-                await showCloseTicketModal(interaction);
-            } catch (error) {
-                console.error('Errore mostrare modal chiusura:', error);
-                if (!interaction.replied && !interaction.deferred) {
-                    try {
-                        await interaction.reply({
-                            content: '❌ Errore durante l\'apertura del form di chiusura!',
-                            flags: 64
-                        });
-                    } catch (replyError) {
-                        console.log('⚠️ Impossibile rispondere all\'interaction');
-                    }
-                }
-            }
+    if (interaction.isButton() && interaction.customId === 'close_ticket') {
+        try {
+            const { showCloseTicketModal } = require('./utils/ticketUtils');
+            await showCloseTicketModal(interaction);
+        } catch (error) {
+            console.error('Errore mostrare modal chiusura:', error);
         }
     }
+    
     // Gestione modal per chiusura ticket
-    if (interaction.isModalSubmit()) {
-        if (interaction.customId === 'close_ticket_modal') {
-            try {
-                const { closeTicketWithReason } = require('./utils/ticketUtils');
-                await closeTicketWithReason(interaction);
-            } catch (error) {
-                console.error('Errore chiusura ticket con motivazione:', error);
-                if (!interaction.replied && !interaction.deferred) {
-                    try {
-                        await interaction.reply({
-                            content: '❌ Errore durante la chiusura del ticket!',
-                            flags: 64
-                        });
-                    } catch (replyError) {
-                        console.log('⚠️ Impossibile rispondere all\'interaction');
-                    }
-                }
-            }
+    if (interaction.isModalSubmit() && interaction.customId === 'close_ticket_modal') {
+        try {
+            const { closeTicketWithReason } = require('./utils/ticketUtils');
+            await closeTicketWithReason(interaction);
+        } catch (error) {
+            console.error('Errore chiusura ticket con motivazione:', error);
         }
     }
 });
@@ -1327,36 +1242,6 @@ async function initDatabase() {
                 close_reason TEXT
             )
         `);
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS ticket_messages (
-                id SERIAL PRIMARY KEY,
-                ticket_id INTEGER REFERENCES tickets(id),
-                user_id VARCHAR(20) NOT NULL,
-                username VARCHAR(100) NOT NULL,
-                content TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS bot_status (
-                id SERIAL PRIMARY KEY,
-                guild_id VARCHAR(20) PRIMARY KEY,
-                status_channel_id VARCHAR(20),
-                status_message_id VARCHAR(20),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS persistent_roles (
-                user_id VARCHAR(20) NOT NULL,
-                guild_id VARCHAR(20) NOT NULL,
-                role_id VARCHAR(20) NOT NULL,
-                assigned_by VARCHAR(20) NOT NULL,
-                assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, guild_id, role_id)
-            )
-        `);
         console.log('✅ Database inizializzato correttamente');
     } catch (error) {
         console.error('❌ Errore inizializzazione database:', error);
@@ -1376,7 +1261,6 @@ async function deployCommands() {
   const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
   for (const file of commandFiles) {
     try {
-      delete require.cache[require.resolve(`./commands/${file}`)];
       const command = require(`./commands/${file}`);
       if (command.data?.name) {
         commands.push(command.data.toJSON());
@@ -1399,40 +1283,17 @@ async function deployCommands() {
       { body: commands }
     );
     console.log(`✅ ${data.length} comandi registrati GLOBALMENTE!`);
-    console.log(` → Disponibili in TUTTI i server (anche Server 2)`);
   } catch (error) {
-    console.error('❌ ERRORE DEPLOY GLOBALE:');
-    console.error(` → Codice: ${error.code}`);
-    console.error(` → Messaggio: ${error.message}`);
-    if (error.code === 50001) {
-      console.error(` → Il bot NON ha 'applications.commands' in nessun server`);
-      console.error(` → Vai su Developer Portal → OAuth2 → URL Generator → Aggiungi 'applications.commands'`);
-    }
+    console.error('❌ ERRORE DEPLOY GLOBALE:', error);
   }
   console.log('🎉 Deploy globale completato!');
   isDeploying = false;
 }
 
-// Gestione riconnessione automatica
-client.on('disconnect', () => {
-    console.log('🔌 Bot disconnesso da Discord...');
-});
-client.on('reconnecting', () => {
-    console.log('🔄 Riconnessione a Discord in corso...');
-});
-client.on('resume', (replayed) => {
-    console.log(`✅ Connessione ripristinata. Eventi replay: ${replayed}`);
-});
-client.on('error', (error) => {
-    console.error('❌ Errore client Discord:', error);
-});
-
 // Avvio bot
 client.once('ready', async () => {
     console.log(`✅ Bot online come ${client.user.tag}`);
     console.log(`🏠 Server: ${client.guilds.cache.size} server`);
-    console.log(`👥 Utenti: ${client.users.cache.size} utenti`);
-    console.log(`🌐 Web Server: Porta ${PORT}`);
    
     await initDatabase();
     await deployCommands();
@@ -1442,26 +1303,12 @@ client.once('ready', async () => {
    
     client.user.setActivity({
         name: `${client.guilds.cache.size} servers | /help`,
-        type: 3 // WATCHING
+        type: 3
     });
    
     setInterval(() => {
         updateStatusPeriodically(client);
     }, 5 * 60 * 1000);
-
-    setInterval(() => {
-        const uptime = process.uptime();
-        const hours = Math.floor(uptime / 3600);
-        const minutes = Math.floor((uptime % 3600) / 60);
-       
-        console.log(`❤️ Keep-alive - Bot attivo da ${hours}h ${minutes}m`);
-       
-        client.user.setActivity({
-            name: `${client.guilds.cache.size} servers | ${hours}h uptime`,
-            type: 3 // WATCHING
-        });
-       
-    }, 10 * 60 * 1000);
 });
 
 // Gestione shutdown graceful
@@ -1502,20 +1349,10 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('uncaughtException', async (error) => {
     console.error('❌ Eccezione non catturata:', error);
-    try {
-        await updateBotStatus(client, 'error', `Crash: ${error.message}`);
-    } catch (statusError) {
-        console.error('❌ Impossibile aggiornare status durante crash:', statusError);
-    }
     setTimeout(() => process.exit(1), 1000);
 });
 process.on('unhandledRejection', async (error) => {
     console.error('❌ Promise rejection non gestito:', error);
-    try {
-        await updateBotStatus(client, 'error', `Rejection: ${error.message}`);
-    } catch (statusError) {
-        console.error('❌ Impossibile aggiornare status durante rejection:', statusError);
-    }
 });
 
 // Export client e db
