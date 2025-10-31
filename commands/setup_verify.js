@@ -231,7 +231,7 @@ module.exports = {
                     { name: '📝 Messaggio ID', value: verifyMessage.id, inline: false }
                 )
                 .setColor(finalEmbedColor)
-                .setTimestamp();
+                //.setTimestamp();
 
             await interaction.editReply({ embeds: [confirmEmbed] });
 
