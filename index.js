@@ -6,6 +6,7 @@ const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
+const { cleanupOldTranscripts } = require('./utils/ticketUtils');
 require('dotenv').config();
 const db = require('./db');
 
@@ -19,6 +20,25 @@ const client = new Client({
         GatewayIntentBits.GuildModeration,
     ],
 });
+
+// Avvia pulizia automatica all'avvio e ogni 24 ore
+async function startAutoCleanup() {
+    try {
+        console.log('🧹 Avvio pulizia automatica transcript...');
+        await cleanupOldTranscripts(7);
+        
+        // Esegui pulizia ogni 24 ore
+        setInterval(async () => {
+            console.log('🔄 Esecuzione pulizia automatica giornaliera...');
+            await cleanupOldTranscripts(7);
+        }, 24 * 60 * 60 * 1000); // 24 ore
+        
+        console.log('✅ Pulizia automatica configurata (ogni 24 ore)');
+    } catch (error) {
+        console.error('❌ Errore avvio pulizia automatica:', error);
+    }
+}
+
 
 // === FUNZIONE MIGLIORATA PER ESTRARRE SERVER ID DAL NOME FILE ===
 function extractServerIdFromFilename(filename) {
@@ -2315,6 +2335,7 @@ client.once('ready', async () => {
     await detectPreviousCrash(client);
     await initializeStatusSystem(client);
     await updateBotStatus(client, 'online', 'Avvio completato');
+    await startAutoCleanup();
    
     client.user.setActivity({
         name: `${client.guilds.cache.size} servers | /help`,
