@@ -7,7 +7,7 @@ const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
 require('dotenv').config();
-const db = require('./db'); // importa db da nuovo file
+const db = require('./db');
 
 // Inizializzazione client Discord
 const client = new Client({
@@ -24,114 +24,50 @@ const client = new Client({
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// === MIDDLEWARE IN ORDINE CORRETTO ===
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ROTTA TRANSCRIPT ONLINE
-app.get('/transcript/:identifier', (req, res) => {
-    const identifier = req.params.identifier.toLowerCase();
-    const transcriptDir = path.join(__dirname, 'transcripts');
-    const filePath = path.join(transcriptDir, `${identifier}.html`);
-
-    if (fs.existsSync(filePath)) {
-        res.setHeader('Content-Type', 'text/html');
-        return res.sendFile(filePath);
+// Session middleware
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { 
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000
     }
+}));
 
-    res.status(404).send(`
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript non trovato</title>
-    <style>
-        body { background: #1e1f23; color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; }
-        h1 { color: #ed4245; }
-        p { font-size: 1.2em; }
-        .discord { color: #5865F2; }
-    </style>
-</head>
-<body>
-    <h1>Transcript non trovato</h1>
-    <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
-    <p>Torna tra 7 giorni? No, è già andato.</p>
-</body>
-</html>
-    `);
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Configurazione Passport
+passport.use(new DiscordStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.DISCORD_CLIENT_SECRET,
+    callbackURL: process.env.CALLBACK_URL || `http://localhost:${PORT}/auth/discord/callback`,
+    scope: ['identify', 'guilds']
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        return done(null, profile);
+    } catch (error) {
+        return done(error, null);
+    }
+}));
+
+passport.serializeUser((user, done) => {
+    done(null, user);
 });
 
-// === PROTEZIONE STAFF PER /transcripts ===
-app.get('/transcripts', (req, res) => {
-    const token = req.query.token;
-    if (!token || token !== process.env.STAFF_TOKEN) {
-        return res.status(403).send(`
-<!DOCTYPE html>
-<html><head><title>Accesso Negato</title>
-<style>body{background:#1e1f23;color:#ed4245;font-family:sans-serif;text-align:center;padding:100px;}
-h1{font-size:3em;}</style></head>
-<body><h1>Accesso Negato</h1><p>Solo lo staff può accedere.</p></body></html>
-        `);
-    }
-
-    // === LISTA TRANSCRIPT (PROTETTA) ===
-    const transcriptDir = path.join(__dirname, 'transcripts');
-    let list = '';
-
-    if (fs.existsSync(transcriptDir)) {
-        const files = fs.readdirSync(transcriptDir)
-            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
-            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
-
-        list = files.length > 0 ? `
-            <h2>Transcript Archiviati (${files.length})</h2>
-            <ul>
-                ${files.map(file => {
-                    const name = file.replace('.html', '');
-                    const date = new Date(fs.statSync(path.join(transcriptDir, file)).mtime).toLocaleString('it-IT');
-                    return `<li><a href="/transcript/${name}" target="_blank">#${name}</a> <small>${date}</small></li>`;
-                }).join('')}
-            </ul>
-        ` : '<p>Nessun transcript trovato.</p>';
-    } else {
-        list = '<p>Cartella non trovata.</p>';
-    }
-
-    res.send(`
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript - Staff Only</title>
-    <style>
-        body { margin:0; background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; padding:40px; }
-        .container { max-width:800px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; }
-        h1 { color:#5865F2; text-align:center; }
-        ul { list-style:none; padding:0; }
-        li { padding:12px; background:#2f3136; margin:8px 0; border-radius:8px; }
-        a { color:#00b0f4; text-decoration:none; font-weight:600; }
-        a:hover { text-decoration:underline; }
-        small { float:right; color:#72767d; }
-        .back { text-align:center; margin-top:30px; }
-        .back a { color:#5865F2; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Transcript (Staff)</h1>
-        ${list}
-        <div class="back">
-            <a href="/">← Home</a>
-        </div>
-    </div>
-</body>
-</html>
-    `);
+passport.deserializeUser((user, done) => {
+    done(null, user);
 });
 
 // === MIDDLEWARE DI AUTENTICAZIONE GLOBALE ===
 function requireAuth(req, res, next) {
-    // Escludi le rotte di auth e health check dall'autenticazione
     const publicRoutes = ['/auth/discord', '/auth/discord/callback', '/auth/failure', '/health', '/api/status'];
     
     if (publicRoutes.includes(req.path)) {
@@ -142,7 +78,6 @@ function requireAuth(req, res, next) {
         return next();
     }
     
-    // Salva la URL originale per redirect dopo il login
     req.session.returnTo = req.originalUrl;
     res.redirect('/auth/discord');
 }
@@ -150,22 +85,53 @@ function requireAuth(req, res, next) {
 // Applica il middleware a TUTTE le rotte
 app.use(requireAuth);
 
-// Rotta di login principale - reindirizza immediatamente a Discord OAuth
+// === ROTTE DI AUTENTICAZIONE ===
 app.get('/auth/discord', passport.authenticate('discord'));
 
-// Callback - gestisce il ritorno da Discord
 app.get('/auth/discord/callback',
     passport.authenticate('discord', { 
         failureRedirect: '/auth/failure'
     }),
     (req, res) => {
-        // Redirect alla pagina originale richiesta o alla home
         const returnTo = req.session.returnTo || '/';
         delete req.session.returnTo;
         res.redirect(returnTo);
     }
 );
 
+app.get('/auth/failure', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Autenticazione Fallita</title>
+            <style>
+                body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
+                       border-radius: 8px; text-decoration: none; margin: 10px; }
+            </style>
+        </head>
+        <body>
+            <h1>❌ Autenticazione Fallita</h1>
+            <p>Impossibile accedere con Discord. Riprova.</p>
+            <a href="/auth/discord" class="btn">Riprova Login</a>
+        </body>
+        </html>
+    `);
+});
+
+app.get('/logout', (req, res) => {
+    req.logout((err) => {
+        if (err) {
+            console.error('Logout error:', err);
+        }
+        req.session.destroy(() => {
+            res.redirect('/auth/discord');
+        });
+    });
+});
+
+// === MIDDLEWARE PER VERIFICA STAFF ===
 function checkStaffRole(req, res, next) {
     if (!req.isAuthenticated()) {
         return res.redirect('/auth/discord');
@@ -211,81 +177,7 @@ function checkStaffRole(req, res, next) {
     }
 }
 
-// Applica solo alla rotta transcripts
-app.get('/transcripts', checkStaffRole, (req, res) => {
-    // ... codice transcripts come prima
-});
-
-app.get('/logout', (req, res) => {
-    req.logout((err) => {
-        if (err) {
-            console.error('Logout error:', err);
-        }
-        // Distruggi completamente la sessione
-        req.session.destroy(() => {
-            res.redirect('/auth/discord'); // Reindirizza al login
-        });
-    });
-});
-
-// LISTA COMPLETA TRANSCRIPT
-app.get('/transcripts', (req, res) => {
-    const transcriptDir = path.join(__dirname, 'transcripts');
-    let list = '';
-
-    if (fs.existsSync(transcriptDir)) {
-        const files = fs.readdirSync(transcriptDir)
-            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
-            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
-
-        list = files.length > 0 ? `
-            <h2>Tutti i Transcript (${files.length})</h2>
-            <ul>
-                ${files.map(file => {
-                    const name = file.replace('.html', '');
-                    const date = new Date(fs.statSync(path.join(transcriptDir, file)).mtime).toLocaleString('it-IT');
-                    return `<li><a href="/transcript/${name}" target="_blank">#${name}</a> <small>${date}</small></li>`;
-                }).join('')}
-            </ul>
-        ` : '<p>Nessun transcript trovato.</p>';
-    } else {
-        list = '<p>Cartella transcript non trovata.</p>';
-    }
-
-    res.send(`
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tutti i Transcript</title>
-    <style>
-        body { margin:0; background:#0f0f12; color:#fff; font-family:'Inter',sans-serif; padding:40px; }
-        .container { max-width:800px; margin:auto; background:#1a1a1d; border-radius:16px; padding:30px; }
-        h1 { color:#5865F2; text-align:center; }
-        ul { list-style:none; padding:0; }
-        li { padding:12px; background:#2f3136; margin:8px 0; border-radius:8px; }
-        a { color:#00b0f4; text-decoration:none; font-weight:600; }
-        a:hover { text-decoration:underline; }
-        small { float:right; color:#72767d; }
-        .back { text-align:center; margin-top:30px; }
-        .back a { color:#5865F2; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Transcript Archiviati</h1>
-        ${list}
-        <div class="back">
-            <a href="/">← Torna alla home</a>
-        </div>
-    </div>
-</body>
-</html>
-    `);
-});
-
-// Health check migliorato
+// === ROTTE PUBBLICHE ===
 app.get('/health', (req, res) => {
     if (client && client.isReady()) {
         res.status(200).json({
@@ -302,8 +194,419 @@ app.get('/health', (req, res) => {
     }
 });
 
-// HOMEPAGE MODERNA CON DESIGN AGGIORNATO
-// HOMEPAGE - Accessibile solo se autenticati
+app.get('/api/status', (req, res) => {
+    try {
+        const botUptime = process.uptime();
+        const hours = Math.floor(botUptime / 3600);
+        const minutes = Math.floor((botUptime % 3600) / 60);
+        const seconds = Math.floor(botUptime % 60);
+
+        let botStatus = 0;
+        let statusText = 'OFFLINE';
+
+        if (client && client.isReady()) {
+            botStatus = 1;
+            statusText = 'ONLINE';
+        } else if (client) {
+            botStatus = 2;
+            statusText = 'CONNECTING';
+        }
+
+        res.json({
+            bot: {
+                status: statusText,
+                statusCode: botStatus,
+                tag: client?.user?.tag || 'Offline',
+                uptime: `${hours}h ${minutes}m ${seconds}s`,
+                rawUptime: botUptime,
+                guilds: client?.guilds?.cache?.size || 0,
+                ping: client?.ws?.ping || 'N/A',
+                lastUpdate: new Date().toISOString(),
+                isReady: client?.isReady(),
+                wsStatus: client?.ws?.status
+            },
+            server: {
+                status: 'ONLINE',
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString(),
+                ping: 'N/A',
+                guilds: 0,
+                tags: 'ticket, support, advanced'
+            }
+        });
+    } catch (error) {
+        console.error('Errore in /api/status:', error);
+        res.json({
+            bot: {
+                status: 'OFFLINE',
+                statusCode: 0,
+                tag: 'Errore di connessione',
+                uptime: '0h 0m 0s',
+                guilds: 0,
+                ping: 'N/A',
+                lastUpdate: new Date().toISOString()
+            },
+            server: {
+                status: 'ONLINE',
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString(),
+                ping: 'N/A',
+                guilds: 0,
+                tags: 'ticket, support, advanced'
+            }
+        });
+    }
+});
+
+// === ROTTA TRANSCRIPT ONLINE ===
+app.get('/transcript/:identifier', (req, res) => {
+    const identifier = req.params.identifier.toLowerCase();
+    const transcriptDir = path.join(__dirname, 'transcripts');
+    const filePath = path.join(transcriptDir, `${identifier}.html`);
+
+    if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', 'text/html');
+        return res.sendFile(filePath);
+    }
+
+    res.status(404).send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript non trovato</title>
+    <style>
+        body { background: #1e1f23; color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #ed4245; }
+        p { font-size: 1.2em; }
+        .discord { color: #5865F2; }
+    </style>
+</head>
+<body>
+    <h1>Transcript non trovato</h1>
+    <p>Il ticket <span class="discord">#${identifier}</span> non esiste o è stato eliminato.</p>
+    <p>Torna tra 7 giorni? No, è già andato.</p>
+</body>
+</html>
+    `);
+});
+
+// === ROTTA TRANSCRIPT PROTETTA (SOLO STAFF) ===
+app.get('/transcripts', checkStaffRole, (req, res) => {
+    const transcriptDir = path.join(__dirname, 'transcripts');
+    let list = '';
+
+    if (fs.existsSync(transcriptDir)) {
+        const files = fs.readdirSync(transcriptDir)
+            .filter(f => f.endsWith('.html') && f !== '.gitkeep')
+            .sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
+
+        list = files.length > 0 ? `
+            <div class="transcript-header">
+                <h2><i class="fas fa-file-alt"></i> Transcript Archiviati</h2>
+                <div class="transcript-stats">
+                    <span class="stat"><i class="fas fa-folder"></i> ${files.length} transcript totali</span>
+                    <span class="user-info">
+                        <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                             class="user-avatar" alt="Avatar">
+                        ${req.user.username}
+                    </span>
+                </div>
+            </div>
+            <div class="transcript-list">
+                ${files.map(file => {
+                    const name = file.replace('.html', '');
+                    const stats = fs.statSync(path.join(transcriptDir, file));
+                    const date = new Date(stats.mtime).toLocaleString('it-IT');
+                    const size = (stats.size / 1024).toFixed(2);
+                    
+                    return `
+                    <div class="transcript-item">
+                        <div class="transcript-info">
+                            <div class="transcript-name">
+                                <i class="fas fa-ticket-alt"></i>
+                                <a href="/transcript/${name}" target="_blank">#${name}</a>
+                            </div>
+                            <div class="transcript-meta">
+                                <span><i class="far fa-clock"></i> ${date}</span>
+                                <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
+                            </div>
+                        </div>
+                        <div class="transcript-actions">
+                            <a href="/transcript/${name}" target="_blank" class="btn-view">
+                                <i class="fas fa-eye"></i> Visualizza
+                            </a>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        ` : `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <h3>Nessun transcript trovato</h3>
+                <p>Non ci sono ancora transcript archiviati.</p>
+            </div>
+        `;
+    } else {
+        list = '<div class="error-state">Cartella transcript non trovata.</div>';
+    }
+
+    res.send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript - Staff Area</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --success: #00ff88;
+            --error: #ed4245;
+            --background: #0f0f12;
+            --card-bg: #1a1a1d;
+            --text-primary: #ffffff;
+            --text-secondary: #b9bbbe;
+            --border: #2f3136;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--card-bg);
+            padding: 10px 15px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .transcript-header {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            border: 1px solid var(--border);
+        }
+
+        .transcript-header h2 {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .transcript-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .stat {
+            background: var(--primary);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .transcript-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .transcript-item {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .transcript-item:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        .transcript-info {
+            flex: 1;
+        }
+
+        .transcript-name {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .transcript-name a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .transcript-name a:hover {
+            color: var(--primary);
+        }
+
+        .transcript-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .transcript-meta span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .transcript-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-view {
+            background: var(--primary);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background 0.3s ease;
+        }
+
+        .btn-view:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-logout {
+            background: var(--error);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-logout:hover {
+            background: #d83639;
+        }
+
+        .empty-state, .error-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: var(--border);
+        }
+
+        @media (max-width: 768px) {
+            .transcript-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .transcript-actions {
+                align-self: flex-end;
+            }
+            
+            .transcript-stats {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-shield-alt"></i> Staff Area - Transcript</h1>
+            <div class="user-actions">
+                <div class="user-info">
+                    <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                         class="user-avatar" alt="Avatar">
+                    <span>${req.user.username}</span>
+                </div>
+                <a href="/logout" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+        
+        ${list}
+        
+        <div style="text-align: center; margin-top: 40px;">
+            <a href="/" style="color: var(--primary); text-decoration: none;">
+                <i class="fas fa-arrow-left"></i> Torna alla Home
+            </a>
+        </div>
+    </div>
+</body>
+</html>
+    `);
+});
+
+// === HOMEPAGE MODERNA (protetta) ===
 app.get('/', (req, res) => {
     res.send(`
 <!DOCTYPE html>
@@ -431,7 +734,6 @@ app.get('/', (req, res) => {
             background: #d83639;
         }
 
-        /* Resto del CSS rimane uguale alla versione precedente */
         .logo {
             font-size: 3.5rem;
             font-weight: 800;
@@ -1063,71 +1365,6 @@ module.exports = { client, db };
 client.login(process.env.DISCORD_TOKEN).catch(error => {
     console.error('❌ Errore login bot:', error);
     process.exit(1);
-});
-
-// Endpoint API per stato bot (usato dalla pagina)
-app.get('/api/status', (req, res) => {
-    try {
-        const botUptime = process.uptime();
-        const hours = Math.floor(botUptime / 3600);
-        const minutes = Math.floor((botUptime % 3600) / 60);
-        const seconds = Math.floor(botUptime % 60);
-
-        let botStatus = 0;
-        let statusText = 'OFFLINE';
-
-        if (client && client.isReady()) {
-            botStatus = 1;
-            statusText = 'ONLINE';
-        } else if (client) {
-            botStatus = 2;
-            statusText = 'CONNECTING';
-        }
-
-        res.json({
-            bot: {
-                status: statusText,
-                statusCode: botStatus,
-                tag: client?.user?.tag || 'Offline',
-                uptime: `${hours}h ${minutes}m ${seconds}s`,
-                rawUptime: botUptime,
-                guilds: client?.guilds?.cache?.size || 0,
-                ping: client?.ws?.ping || 'N/A',
-                lastUpdate: new Date().toISOString(),
-                isReady: client?.isReady(),
-                wsStatus: client?.ws?.status
-            },
-            server: {
-                status: 'ONLINE',
-                uptime: process.uptime(),
-                timestamp: new Date().toISOString(),
-                ping: 'N/A',
-                guilds: 0,
-                tags: 'ticket, support, advanced'
-            }
-        });
-    } catch (error) {
-        console.error('Errore in /api/status:', error);
-        res.json({
-            bot: {
-                status: 'OFFLINE',
-                statusCode: 0,
-                tag: 'Errore di connessione',
-                uptime: '0h 0m 0s',
-                guilds: 0,
-                ping: 'N/A',
-                lastUpdate: new Date().toISOString()
-            },
-            server: {
-                status: 'ONLINE',
-                uptime: process.uptime(),
-                timestamp: new Date().toISOString(),
-                ping: 'N/A',
-                guilds: 0,
-                tags: 'ticket, support, advanced'
-            }
-        });
-    }
 });
 
 console.log('File index.js caricato completamente');
