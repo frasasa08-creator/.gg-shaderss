@@ -262,16 +262,18 @@ app.get('/', (req, res) => {
                 <div class="info"><span>Uptime:</span> <span id="uptime">-</span></div>
             </div>
 
-            <div class="live-card">
+            <!-- WIDGET CARD -->
+              <div class="card">
                 <h3>.gg/shaderss server live</h3>
-                <div class="members" id="members">
-                    <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" width="350" height="500" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
-                </div>
-                <div style="text-align:center; margin-top:15px;">
-                    <a href="https://discord.gg/shaderss" class="btn" target="_blank">Join Discord</a>
-                </div>
-            </div>
-        </div>
+                <div class="widget-container">
+                  <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" 
+                          width="100%" height="400" allowtransparency="true" frameborder="0" 
+                          sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+                          style="border-radius: 8px;"></iframe>
+                <div class="status">
+                    <p><i class="fas fa-circle loading"></i> <strong>Caricamento...</strong></p>
+                    <p>Tag: <span id="tags">-</span> | Server: <span id="guilds">-</span> | Ping: <span id="ping">-</span>ms | Uptime: <span id="uptime">-</span></p>
+         </div>
 
         <!-- PULSANTE GRIGIO SEMPRE VISIBILE -->
         <div class="transcript-btn">
