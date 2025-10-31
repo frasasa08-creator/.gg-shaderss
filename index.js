@@ -2,6 +2,9 @@
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');
+const session = require('express-session');
+const passport = require('passport');
+const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
 require('dotenv').config();
 const db = require('./db'); // importa db da nuovo file
@@ -126,6 +129,105 @@ h1{font-size:3em;}</style></head>
     `);
 });
 
+// === MIDDLEWARE DI AUTENTICAZIONE GLOBALE ===
+function requireAuth(req, res, next) {
+    // Escludi le rotte di auth e health check dall'autenticazione
+    const publicRoutes = ['/auth/discord', '/auth/discord/callback', '/auth/failure', '/health', '/api/status'];
+    
+    if (publicRoutes.includes(req.path)) {
+        return next();
+    }
+    
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    
+    // Salva la URL originale per redirect dopo il login
+    req.session.returnTo = req.originalUrl;
+    res.redirect('/auth/discord');
+}
+
+// Applica il middleware a TUTTE le rotte
+app.use(requireAuth);
+
+// Rotta di login principale - reindirizza immediatamente a Discord OAuth
+app.get('/auth/discord', passport.authenticate('discord'));
+
+// Callback - gestisce il ritorno da Discord
+app.get('/auth/discord/callback',
+    passport.authenticate('discord', { 
+        failureRedirect: '/auth/failure'
+    }),
+    (req, res) => {
+        // Redirect alla pagina originale richiesta o alla home
+        const returnTo = req.session.returnTo || '/';
+        delete req.session.returnTo;
+        res.redirect(returnTo);
+    }
+);
+
+function checkStaffRole(req, res, next) {
+    if (!req.isAuthenticated()) {
+        return res.redirect('/auth/discord');
+    }
+
+    const allowedGuilds = process.env.ALLOWED_GUILDS ? process.env.ALLOWED_GUILDS.split(',') : [];
+    const staffRoleIds = process.env.STAFF_ROLE_IDS ? process.env.STAFF_ROLE_IDS.split(',') : [];
+    
+    const userGuilds = req.user.guilds || [];
+    const hasAccess = userGuilds.some(guild => {
+        const hasGuildAccess = allowedGuilds.includes(guild.id);
+        const hasStaffRole = staffRoleIds.some(roleId => 
+            guild.roles && guild.roles.includes(roleId)
+        );
+        const isAdmin = (guild.permissions & 0x8) === 0x8;
+        
+        return hasGuildAccess && (hasStaffRole || isAdmin);
+    });
+
+    if (hasAccess) {
+        return next();
+    } else {
+        return res.status(403).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Accesso Negato</title>
+                <style>
+                    body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                    .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
+                           border-radius: 8px; text-decoration: none; margin: 10px; }
+                </style>
+            </head>
+            <body>
+                <h1>❌ Accesso Negato ai Transcript</h1>
+                <p>Non hai i permessi staff necessari per accedere ai transcript.</p>
+                <p>Contatta un amministratore se pensi sia un errore.</p>
+                <a href="/" class="btn">Torna alla Home</a>
+                <a href="/logout" class="btn">Logout</a>
+            </body>
+            </html>
+        `);
+    }
+}
+
+// Applica solo alla rotta transcripts
+app.get('/transcripts', checkStaffRole, (req, res) => {
+    // ... codice transcripts come prima
+});
+
+app.get('/logout', (req, res) => {
+    req.logout((err) => {
+        if (err) {
+            console.error('Logout error:', err);
+        }
+        // Distruggi completamente la sessione
+        req.session.destroy(() => {
+            res.redirect('/auth/discord'); // Reindirizza al login
+        });
+    });
+});
+
 // LISTA COMPLETA TRANSCRIPT
 app.get('/transcripts', (req, res) => {
     const transcriptDir = path.join(__dirname, 'transcripts');
@@ -201,6 +303,7 @@ app.get('/health', (req, res) => {
 });
 
 // HOMEPAGE MODERNA CON DESIGN AGGIORNATO
+// HOMEPAGE - Accessibile solo se autenticati
 app.get('/', (req, res) => {
     res.send(`
 <!DOCTYPE html>
@@ -248,39 +351,45 @@ app.get('/', (req, res) => {
             margin: 0 auto;
         }
 
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 40px 20px;
-            background: linear-gradient(135deg, var(--card-bg) 0%, #1e1e22 100%);
-            border-radius: 20px;
+        /* Header con info utente */
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 16px;
             border: 1px solid var(--border);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
 
-        .logo {
-            font-size: 3.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--primary) 0%, #9b59b6 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 10px;
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
 
-        .tagline {
-            font-size: 1.2rem;
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid var(--primary);
+        }
+
+        .user-details h2 {
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .user-details p {
             color: var(--text-secondary);
-            margin-bottom: 25px;
-            font-weight: 500;
+            font-size: 0.9rem;
         }
 
-        .btn-group {
+        .header-actions {
             display: flex;
             gap: 15px;
-            justify-content: center;
-            flex-wrap: wrap;
+            align-items: center;
         }
 
         .btn {
@@ -312,10 +421,34 @@ app.get('/', (req, res) => {
 
         .btn-secondary:hover {
             background: var(--border-light);
-            transform: translateY(-2px);
         }
 
-        /* Main Grid */
+        .btn-logout {
+            background: var(--error);
+        }
+
+        .btn-logout:hover {
+            background: #d83639;
+        }
+
+        /* Resto del CSS rimane uguale alla versione precedente */
+        .logo {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #9b59b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+
         .main-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -323,7 +456,6 @@ app.get('/', (req, res) => {
             margin-bottom: 30px;
         }
 
-        /* Cards */
         .card {
             background: var(--card-bg);
             border-radius: 16px;
@@ -359,14 +491,9 @@ app.get('/', (req, res) => {
             gap: 10px;
         }
 
-        .card h2 i {
-            color: var(--primary);
-        }
-
-        /* Status Items */
         .status-item {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             padding: 12px 0;
             border-bottom: 1px solid var(--border-light);
@@ -395,11 +522,6 @@ app.get('/', (req, res) => {
             color: var(--error);
         }
 
-        .status-loading {
-            color: var(--warning);
-        }
-
-        /* Widget Container */
         .widget-container {
             border-radius: 12px;
             overflow: hidden;
@@ -407,58 +529,6 @@ app.get('/', (req, res) => {
             margin-top: 15px;
         }
 
-        .widget-container iframe {
-            display: block;
-            border: none;
-        }
-
-        /* Members List */
-        .members-list {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-top: 15px;
-        }
-
-        .member {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px;
-            border-radius: 8px;
-            transition: background 0.2s ease;
-        }
-
-        .member:hover {
-            background: var(--border);
-        }
-
-        .member-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 0.9rem;
-        }
-
-        .member-info {
-            flex: 1;
-        }
-
-        .member-name {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .member-status {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-
-        /* Footer */
         .footer {
             text-align: center;
             margin-top: 50px;
@@ -467,82 +537,54 @@ app.get('/', (req, res) => {
             border-top: 1px solid var(--border);
         }
 
-        .powered-by {
-            font-size: 0.9rem;
-        }
-
-        .powered-by strong {
-            color: var(--text-secondary);
-        }
-
-        /* Loading Animation */
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .loading {
-            animation: pulse 1.5s infinite;
-            color: var(--warning);
-        }
-
-        /* Responsive */
         @media (max-width: 768px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .header {
-                padding: 30px 15px;
-            }
-            
-            .logo {
-                font-size: 2.5rem;
-            }
-            
-            .btn-group {
+            .user-header {
                 flex-direction: column;
-                align-items: center;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .header-actions {
+                flex-direction: column;
+                width: 100%;
             }
             
             .btn {
-                width: 200px;
+                width: 100%;
                 justify-content: center;
             }
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--border);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--primary);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--primary-dark);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <header class="header">
+        <!-- Header con info utente -->
+        <div class="user-header">
+            <div class="user-info">
+                <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                     class="user-avatar" alt="Avatar">
+                <div class="user-details">
+                    <h2>Benvenuto, ${req.user.username}!</h2>
+                    <p>Accesso effettuato con Discord</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/transcripts" class="btn">
+                    <i class="fas fa-file-alt"></i> Transcript Staff
+                </a>
+                <a href="/logout" class="btn btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Header principale -->
+        <header class="header" style="text-align: center; margin-bottom: 40px; padding: 40px 20px; background: linear-gradient(135deg, var(--card-bg) 0%, #1e1e22 100%); border-radius: 20px; border: 1px solid var(--border); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
             <h1 class="logo">.gg/shaderss</h1>
             <p class="tagline">Discord Bot • 24/7 • Advanced Features</p>
             <div class="btn-group">
                 <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" class="btn">
                     <i class="fas fa-robot"></i>Invita Bot
-                </a>
-                <a href="/transcripts" class="btn btn-secondary">
-                    <i class="fas fa-file-alt"></i>Tutti i Transcript
                 </a>
             </div>
         </header>
@@ -643,7 +685,6 @@ app.get('/', (req, res) => {
             }
         }
 
-        // Aggiorna immediatamente e poi ogni 10 secondi
         updateStatus();
         setInterval(updateStatus, 10000);
     </script>
