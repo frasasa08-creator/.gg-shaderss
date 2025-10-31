@@ -29,31 +29,42 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Trust proxy per Render
+// TRUST PROXY CRITICO per Render
 app.set('trust proxy', 1);
 
-// Session middleware CONFIGURAZIONE CORRETTA per Render
+// Session middleware - CONFIGURAZIONE DEFINITIVA per Render
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'fallback-insecure-secret-change-this',
-    resave: true, // IMPORTANTE: true per Render
-    saveUninitialized: true, // IMPORTANTE: true per Render
-    cookie: { 
-        secure: true, // FORZA HTTPS - Render usa sempre HTTPS
-        maxAge: 24 * 60 * 60 * 1000, // 24 ore
+    secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: true, // FORZA HTTPS
         httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 ore
         sameSite: 'lax',
-        domain: '.onrender.com' // DOMINIO SPECIFICO
+        // RIMUOVI domain per permettere a Render di gestirlo
     },
-    name: 'ggshaderss.sid',
-    // Aggiungi store di sessione più robusto
+    name: 'shaderss.sid', // Nome più semplice
     store: new session.MemoryStore(),
-    // Forza il salvataggio della sessione
     rolling: true
 }));
 
 // Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
+
+// DEBUG MIGLIORATO
+app.use((req, res, next) => {
+    console.log('🔍 SESSION DEBUG:', {
+        path: req.path,
+        authenticated: req.isAuthenticated(),
+        user: req.user?.username || 'Nessuno',
+        sessionId: req.sessionID,
+        cookies: req.headers.cookie ? 'Presenti' : 'Assenti',
+        'user-agent': req.headers['user-agent']
+    });
+    next();
+});
 
 // DEBUG: Verifica configurazione
 console.log('🔧 DEBUG Configurazione Session:');
