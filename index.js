@@ -1651,23 +1651,6 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     </div>
 
     <script>
-        function copyTranscriptLink(transcriptId) {
-        
-            const link = window.location.origin + '/transcript/' + transcriptId;
-            navigator.clipboard.writeText(link).then(() => {
-                // Mostra feedback
-                const btn = event.target.closest('.btn-copy');
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-check"></i>';
-                btn.style.background = 'var(--success)';
-                
-                setTimeout(() => {
-                    btn.innerHTML = originalHTML;
-                    btn.style.background = '';
-                }, 2000);
-            });
-        }
-
         /**
          * Elimina un transcript
          */
@@ -1675,18 +1658,17 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             if (!confirm('Sei sicuro di voler eliminare questo transcript?\n\n⚠️ Questa azione è irreversibile!')) {
                 return;
             }
-        
+
             try {
-                // ✅ CORRETTO - stringa template fixata
-                const response = await fetch(`/transcript/${transcriptName}`, {
+                const response = await fetch('/transcript/' + encodeURIComponent(transcriptName), {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json'
                     }
                 });
-        
+
                 const result = await response.json();
-        
+
                 if (result.success) {
                     // Mostra notifica successo
                     showNotification('✅ Transcript eliminato con successo!', 'success');
@@ -1710,6 +1692,24 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 showNotification('❌ Errore di connessione', 'error');
             }
         }
+        function copyTranscriptLink(transcriptId) {
+        
+            const link = window.location.origin + '/transcript/' + transcriptId;
+            navigator.clipboard.writeText(link).then(() => {
+                // Mostra feedback
+                const btn = event.target.closest('.btn-copy');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+                btn.style.background = 'var(--success)';
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.background = '';
+                }, 2000);
+            });
+        }
+
+        
         
         /**
          * Mostra notifica
