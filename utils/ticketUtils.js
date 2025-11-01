@@ -833,9 +833,29 @@ document.addEventListener("click",t=>{let e=t.target;if(!e)return;e.offsetParent
 <footer>Generato il <time>${new Date().toLocaleString('it-IT')}</time></footer>
 </body>
 </html>`;
+    // === AGGIUNGI BOTTONE "RISPONDI IN CHAT WEB" ===
+    const ticketId = ticketResult.rows[0].id;
+    const webChatUrl = `https://gg-shaderss.onrender.com/ticket/${ticketId}`;
+    
+    // Aggiungi il bottone in fondo al transcript
+    const webChatButton = `
+    <div style="text-align:center; margin: 30px 0; padding: 15px; background: #2f3136; border-radius: 8px; border: 1px solid #40444b;">
+        <p style="margin:0 0 10px; color:#dcddde; font-size:14px;">Hai bisogno di rispondere in tempo reale?</p>
+        <button onclick="window.open('${webChatUrl}', '_blank')" 
+                style="background:#5865f2; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; font-size:14px;">
+            Chat Web in Tempo Reale
+        </button>
+        <p style="margin:5px 0 0; font-size:12px; color:#72767d;">
+            Solo staff autorizzato • Aggiornamento live
+        </p>
+    </div>`;
+    
+    // Inserisci il bottone PRIMA della chiusura </body>
+    const finalHtml = htmlContent.replace('</body>', `${webChatButton}</body>`);
+    
     return {
-        attachment: Buffer.from(fallbackHTML, 'utf-8'),
-        name: `transcript-error-${ticketId}.html`
+        attachment: Buffer.from(finalHtml, 'utf-8'),
+        name: `${channel.name}.html`
     };
 }
 
