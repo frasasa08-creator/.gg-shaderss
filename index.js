@@ -31,6 +31,53 @@ const client = new Client({
     ],
 });
 
+// Avvia pulizia automatica all'avvio e ogni 24 ore
+async function startAutoCleanup() {
+    try {
+        console.log('🧹 Avvio pulizia automatica transcript...');
+        await cleanupOldTranscripts(7);
+        
+        // Esegui pulizia ogni 24 ore
+        setInterval(async () => {
+            console.log('🔄 Esecuzione pulizia automatica giornaliera...');
+            await cleanupOldTranscripts(7);
+        }, 24 * 60 * 60 * 1000); // 24 ore
+        
+        console.log('✅ Pulizia automatica configurata (ogni 24 ore)');
+    } catch (error) {
+        console.error('❌ Errore avvio pulizia automatica:', error);
+    }
+}
+
+
+// === FUNZIONE MIGLIORATA PER ESTRARRE SERVER ID DAL NOME FILE ===
+function extractServerIdFromFilename(filename) {
+    console.log(`🔍 Analizzo file: ${filename}`);
+    
+    // Pattern per il formato standard: ticket-{tipo}-{username}-{timestamp}-{serverId}.html
+    const standardPattern = /ticket-\w+-\w+-\d+-(\d{17,19})\.html$/;
+    
+    // Pattern per altri formati comuni
+    const patterns = [
+        standardPattern,
+        /-(\d{17,19})\.html$/,
+        /^(\d{17,19})-.*\.html$/,
+        /ticket-.*-(\d{17,19})\.html$/,
+        /.*-(\d{17,19})\.html$/
+    ];
+    
+    for (const pattern of patterns) {
+        const match = filename.match(pattern);
+        if (match && match[1]) {
+            console.log(`✅ Server ID trovato: ${match[1]}`);
+            return match[1];
+        }
+    }
+    
+    console.log(`❌ Nessun Server ID trovato in: ${filename}`);
+    return null;
+}
+
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
@@ -154,7 +201,6 @@ function requireAuth(req, res, next) {
 
 // Applica il middleware a TUTTE le rotte
 app.use(requireAuth);
-
 
 // === ROTTE DI AUTENTICAZIONE ===
 app.get('/auth/discord', (req, res, next) => {
@@ -356,231 +402,6 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// === ROTTA PER VERIFICARE STRUTTURA DATABASE ===
-app.get('/debug-database', async (req, res) => {
-    try {
-        console.log('🔍 Verifica struttura database...');
-        
-        const tables = ['tickets', 'guild_settings', 'messages'];
-        const results = {};
-        
-        for (const table of tables) {
-            try {
-                // Verifica se la tabella esiste
-                const exists = await db.query(`
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_schema = 'public' 
-                        AND table_name = $1
-                    )
-                `, [table]);
-                
-                if (exists.rows[0].exists) {
-                    // Conta le righe
-                    const count = await db.query(`SELECT COUNT(*) as count FROM ${table}`);
-                    // Prendi la struttura
-                    const structure = await db.query(`
-                        SELECT column_name, data_type, is_nullable
-                        FROM information_schema.columns 
-                        WHERE table_name = $1 
-                        ORDER BY ordinal_position
-                    `, [table]);
-                    
-                    // Prendi qualche dato di esempio
-                    const sample = await db.query(`SELECT * FROM ${table} LIMIT 3`);
-                    
-                    results[table] = {
-                        exists: true,
-                        rowCount: parseInt(count.rows[0].count),
-                        structure: structure.rows,
-                        sample: sample.rows
-                    };
-                } else {
-                    results[table] = { exists: false };
-                }
-            } catch (error) {
-                results[table] = { exists: false, error: error.message };
-            }
-        }
-        
-        res.json(results);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// === DEBUG PERMESSI SPECIFICI SERVER ===
-app.get('/debug-server-access/:guildId', checkStaffRole, async (req, res) => {
-    try {
-        const guildId = req.params.guildId;
-        const userGuilds = req.user.guilds || [];
-        
-        const userGuild = userGuilds.find(g => g.id === guildId);
-        if (!userGuild) {
-            return res.json({ error: 'Utente non nel server' });
-        }
-
-        const result = await db.query(
-            'SELECT settings FROM guild_settings WHERE guild_id = $1',
-            [guildId]
-        );
-
-        let analysis = {
-            guildId: guildId,
-            guildName: userGuild.name,
-            userIsAdmin: (userGuild.permissions & 0x8) === 0x8,
-            userRoles: userGuild.roles || [],
-            hasSettings: result.rows.length > 0,
-            allowedRoles: [],
-            hasAccess: false,
-            accessReason: ''
-        };
-
-        if (result.rows.length > 0) {
-            const settings = result.rows[0].settings || {};
-            analysis.allowedRoles = settings.allowed_roles || [];
-            analysis.hasAllowedRole = analysis.userRoles.some(roleId => 
-                analysis.allowedRoles.includes(roleId)
-            );
-            analysis.hasAccess = analysis.hasAllowedRole || analysis.userIsAdmin;
-            analysis.accessReason = analysis.userIsAdmin ? 'admin' : 
-                                  analysis.hasAllowedRole ? 'role' : 'none';
-        } else {
-            analysis.hasAccess = analysis.userIsAdmin;
-            analysis.accessReason = analysis.userIsAdmin ? 'admin' : 'none';
-        }
-
-        res.json(analysis);
-
-    } catch (error) {
-        console.error('❌ Errore debug server access:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// === ROTTA PER VEDERE SERVER DEL BOT ===
-app.get('/debug-bot-guilds', (req, res) => {
-    try {
-        const guilds = Array.from(client.guilds.cache.values()).map(guild => ({
-            id: guild.id,
-            name: guild.name,
-            memberCount: guild.memberCount,
-            icon: guild.icon,
-            joinedAt: guild.joinedAt,
-            ownerId: guild.ownerId,
-            features: guild.features
-        }));
-
-        res.json({
-            total: guilds.length,
-            guilds: guilds
-        });
-    } catch (error) {
-        console.error('❌ Errore debug bot guilds:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// === FUNZIONE PER VERIFICA ACCESSO UTENTE ===
-async function checkUserAccess(user, guildId) {
-    try {
-        console.log('🔍 Verifica accesso per:', user.username, 'nel server:', guildId);
-        
-        // Owner del bot ha sempre accesso
-        if (process.env.BOT_OWNER_ID && user.id === process.env.BOT_OWNER_ID) {
-            console.log('✅ Accesso owner del bot');
-            return true;
-        }
-
-        const userGuilds = user.guilds || [];
-        const userGuild = userGuilds.find(g => g.id === guildId);
-        
-        if (!userGuild) {
-            console.log('❌ Utente non nel server:', guildId);
-            return false;
-        }
-
-        // Controlla impostazioni del server
-        const result = await db.query(
-            'SELECT settings FROM guild_settings WHERE guild_id = $1',
-            [guildId]
-        );
-
-        if (result.rows.length > 0) {
-            const settings = result.rows[0].settings || {};
-            const allowedRoles = settings.allowed_roles || [];
-            const userRoles = userGuild.roles || [];
-            
-            const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
-            const isAdmin = (userGuild.permissions & 0x8) === 0x8;
-            
-            console.log('🔍 Controllo permessi:', {
-                allowedRoles,
-                userRoles,
-                hasAllowedRole,
-                isAdmin
-            });
-            
-            return hasAllowedRole || isAdmin;
-        } else {
-            // Se non ci sono impostazioni, solo admin può accedere
-            const isAdmin = (userGuild.permissions & 0x8) === 0x8;
-            console.log('ℹ️ Nessuna impostazione, solo admin:', isAdmin);
-            return isAdmin;
-        }
-    } catch (error) {
-        console.error('❌ Errore controllo accesso utente:', error);
-        return false;
-    }
-}
-
-// Avvia pulizia automatica all'avvio e ogni 24 ore
-async function startAutoCleanup() {
-    try {
-        console.log('🧹 Avvio pulizia automatica transcript...');
-        await cleanupOldTranscripts(7);
-        
-        // Esegui pulizia ogni 24 ore
-        setInterval(async () => {
-            console.log('🔄 Esecuzione pulizia automatica giornaliera...');
-            await cleanupOldTranscripts(7);
-        }, 24 * 60 * 60 * 1000); // 24 ore
-        
-        console.log('✅ Pulizia automatica configurata (ogni 24 ore)');
-    } catch (error) {
-        console.error('❌ Errore avvio pulizia automatica:', error);
-    }
-}
-
-
-// === FUNZIONE MIGLIORATA PER ESTRARRE SERVER ID DAL NOME FILE ===
-function extractServerIdFromFilename(filename) {
-    console.log(`🔍 Analizzo file: ${filename}`);
-    
-    // Pattern per il formato standard: ticket-{tipo}-{username}-{timestamp}-{serverId}.html
-    const standardPattern = /ticket-\w+-\w+-\d+-(\d{17,19})\.html$/;
-    
-    // Pattern per altri formati comuni
-    const patterns = [
-        standardPattern,
-        /-(\d{17,19})\.html$/,
-        /^(\d{17,19})-.*\.html$/,
-        /ticket-.*-(\d{17,19})\.html$/,
-        /.*-(\d{17,19})\.html$/
-    ];
-    
-    for (const pattern of patterns) {
-        const match = filename.match(pattern);
-        if (match && match[1]) {
-            console.log(`✅ Server ID trovato: ${match[1]}`);
-            return match[1];
-        }
-    }
-    
-    console.log(`❌ Nessun Server ID trovato in: ${filename}`);
-    return null;
-}
-
 app.post('/api/ticket/send-message', async (req, res) => {
     try {
         const { ticketId, message } = req.body;
@@ -588,7 +409,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
 
         console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}`);
 
-        // 1. Cerca il ticket
+        // 1. Cerca il ticket (usa la tua tabella tickets esistente)
         const ticketResult = await db.query(
             'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1',
             [ticketId]
@@ -600,16 +421,16 @@ app.post('/api/ticket/send-message', async (req, res) => {
 
         const ticket = ticketResult.rows[0];
 
-        // 2. Salva il messaggio
+        // 2. Salva il messaggio nella NUOVA tabella messages
         await db.query(
             'INSERT INTO messages (ticket_id, username, content) VALUES ($1, $2, $3)',
             [ticketId, username, message]
         );
 
-        // 3. Invia su Discord - SOLO IL MESSAGGIO, SENZA NOME
+        // 3. Invia su Discord
         const channel = client.channels.cache.get(ticket.channel_id);
         if (channel) {
-            await channel.send(message); // ✅ SOLO MESSAGGIO
+            await channel.send(`**${username}:** ${message}`);
             console.log('✅ Messaggio inviato su Discord');
         }
 
@@ -638,19 +459,15 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
-app.get('/transcripts/:ticketId', async (req, res) => {
+/*app.get('/transcripts/:ticketId', async (req, res) => {
     try {
-        const result = await db.query(
-          'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1', 
-          [req.params.ticketId]
-      );
-      const ticket = result.rows[0];
+        const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
         if (!ticket) {
             return res.status(404).send('Ticket non trovato');
         }
 
         // Verifica permessi utente
-        const hasAccess = await checkUserAccess(req.user, ticket.guild_Id);
+        const hasAccess = await checkUserAccess(req.user, ticket.guildId);
         if (!hasAccess) {
             return res.status(403).send('Accesso negato');
         }
@@ -811,45 +628,32 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     try {
         const { ticketId } = req.params;
 
-        const result = await db.query(
-          'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1', 
-          [ticketId]
-      );
-      const ticket = result.rows[0];
+        const ticket = await Ticket.findOne({ ticketId: ticketId });
         if (!ticket) {
             return res.status(404).json({ error: 'Ticket non trovato' });
         }
 
         // Verifica permessi
-        const hasAccess = await checkUserAccess(req.user, ticket.guildI_d);
+        const hasAccess = await checkUserAccess(req.user, ticket.guildId);
         if (!hasAccess) {
             return res.status(403).json({ error: 'Accesso negato' });
         }
 
-        // Ritorna i messaggi dal database
-        const messagesResult = await db.query(
-            'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY timestamp',
-            [ticketId]
-        );
-
-        res.json(messagesResult.rows);
+        // Ritorna i messaggi dal transcript
+        res.json(ticket.transcript || []);
 
     } catch (error) {
         console.error('❌ Errore recupero messaggi:', error);
         res.status(500).json({ error: 'Errore interno del server' });
     }
-});
+});*/
 
 
 
 // Nuova route per la chat live
 /*app.get('/chat/:ticketId', async (req, res) => {
     try {
-        const result = await db.query(
-          'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1', 
-          [req.params.ticketId]
-      );
-      const ticket = result.rows[0];
+        const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
         if (!ticket) {
             return res.status(404).send('Ticket non trovato');
         }
@@ -1031,7 +835,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
         console.error('Errore chat live:', error);
         res.status(500).send('Errore interno del server');
     }
-});*/
+});
 
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
 app.get('/transcript/:identifier', (req, res) => {
@@ -1213,7 +1017,7 @@ app.get('/transcript/:identifier', (req, res) => {
 </body>
 </html>
     `);
-});
+});*/
 
 // === MIDDLEWARE PER VERIFICA STAFF - INTEGRATO CON ALLOWEDROLES ===
 async function checkStaffRole(req, res, next) {
@@ -1363,26 +1167,17 @@ async function checkStaffRole(req, res, next) {
     }
 }
 
+// === ROTTA PER SELEZIONARE IL SERVER ===
 app.get('/transcripts', checkStaffRole, async (req, res) => {
     try {
         const userGuilds = req.user.guilds || [];
         const accessibleGuilds = [];
 
-        console.log('🤖 Server del bot:', Array.from(client.guilds.cache.keys()));
-        console.log('👤 Server dell\'utente:', userGuilds.map(g => `${g.name} (${g.id})`));
-
         // Trova tutti i server dove l'utente ha accesso + dove il bot è presente
         for (const guild of userGuilds) {
             // Verifica se il bot è in questo server
             const botGuild = client.guilds.cache.get(guild.id);
-            if (!botGuild) {
-                console.log(`❌ Bot non in: ${guild.name} (${guild.id})`);
-                continue;
-            }
-
-            console.log(`\n🔍 Analizzo: ${guild.name} (${guild.id})`);
-            console.log(`   👑 È admin: ${(guild.permissions & 0x8) === 0x8}`);
-            console.log(`   👤 Ruoli utente:`, guild.roles || []);
+            if (!botGuild) continue; // Salta se il bot non è nel server
 
             const result = await db.query(
                 'SELECT settings FROM guild_settings WHERE guild_id = $1',
@@ -1396,24 +1191,17 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                 const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
                 const isAdmin = (guild.permissions & 0x8) === 0x8;
 
-                console.log(`   🎯 Ruoli consentiti:`, allowedRoles);
-                console.log(`   ✅ Ha ruolo consentito: ${hasAllowedRole}`);
-                console.log(`   🔓 Accesso consentito: ${hasAllowedRole || isAdmin}`);
-
                 if (hasAllowedRole || isAdmin) {
                     accessibleGuilds.push({
                         id: guild.id,
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
-                        botPresent: true,
-                        hasSettings: true,
-                        accessType: isAdmin ? 'admin' : 'role'
+                        botPresent: true
                     });
-                    console.log(`   🎉 AGGIUNTO alla lista!`);
                 }
             } else {
-                console.log(`   ℹ️ Nessuna impostazione trovata`);
+                // Se non ci sono impostazioni, solo admin può accedere
                 const isAdmin = (guild.permissions & 0x8) === 0x8;
                 if (isAdmin) {
                     accessibleGuilds.push({
@@ -1421,16 +1209,11 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
-                        botPresent: true,
-                        hasSettings: false,
-                        accessType: 'admin'
+                        botPresent: true
                     });
-                    console.log(`   👑 AGGIUNTO come admin!`);
                 }
             }
         }
-
-        console.log('\n📋 Server accessibili finali:', accessibleGuilds.map(g => `${g.name} (${g.id}) - ${g.accessType}`));
 
         // Se non ci sono server accessibili
         if (accessibleGuilds.length === 0) {
@@ -1709,93 +1492,25 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     }
 });
 
-// === ROTTA PER CREARE IMPOSTAZIONI PER SERVER MANCANTI ===
-app.get('/fix-server-settings/:guildId', checkStaffRole, async (req, res) => {
-    try {
-        const guildId = req.params.guildId;
-        
-        // Verifica se le impostazioni esistono già
-        const existing = await db.query(
-            'SELECT * FROM guild_settings WHERE guild_id = $1',
-            [guildId]
-        );
-
-        if (existing.rows.length > 0) {
-            return res.json({ 
-                success: true, 
-                message: 'Impostazioni già esistenti',
-                settings: existing.rows[0] 
-            });
-        }
-
-        // Crea impostazioni di default
-        const defaultSettings = {
-            allowed_roles: [],
-            ticket_options: [
-                {
-                    name: "Supporto Generale",
-                    emoji: "🎫",
-                    value: "ticket_support",
-                    category: "Supporto"
-                }
-            ]
-        };
-
-        await db.query(`
-            INSERT INTO guild_settings (guild_id, settings) 
-            VALUES ($1, $2)
-        `, [guildId, defaultSettings]);
-
-        res.json({ 
-            success: true, 
-            message: 'Impostazioni create con successo',
-            guildId: guildId
-        });
-
-    } catch (error) {
-        console.error('❌ Errore creazione impostazioni:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // === ROTTA COMPLETA PER GESTIONE TICKET ===
 app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
         const guildId = req.params.guildId;
-        console.log('🔍 Caricamento pagina transcript per guild:', guildId);
-
-        // Verifica che il bot sia nel server
-        const botGuild = client.guilds.cache.get(guildId);
-        if (!botGuild) {
-            console.log('❌ Bot non presente nel server:', guildId);
-            console.log('📋 Server disponibili:', Array.from(client.guilds.cache.keys()));
-            return res.status(404).send(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Bot Non Presente</title>
-                    <style>/* ... stile ... */</style>
-                </head>
-                <body>
-                    <h1>❌ Bot Non Presente</h1>
-                    <p>Il bot non è presente nel server con ID: <strong>${guildId}</strong></p>
-                    <p>Server disponibili: ${Array.from(client.guilds.cache.keys()).join(', ')}</p>
-                    <div>
-                        <a href="/transcripts" class="btn">← Torna alla selezione server</a>
-                    </div>
-                </body>
-                </html>
-            `);
-        }
-
         const userGuilds = req.user.guilds || [];
-        const userGuild = userGuilds.find(g => g.id === guildId);
         
+        // Verifica che l'utente abbia accesso a questo server specifico
+        const userGuild = userGuilds.find(g => g.id === guildId);
         if (!userGuild) {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // 🔥 CORREZIONE: Se non ci sono impostazioni, permetti l'accesso agli admin
+        // Verifica che il bot sia nel server
+        const botGuild = client.guilds.cache.get(guildId);
+        if (!botGuild) {
+            return res.status(404).send('Bot non presente in questo server');
+        }
+
+        // Verifica i permessi
         const result = await db.query(
             'SELECT settings FROM guild_settings WHERE guild_id = $1',
             [guildId]
@@ -1809,23 +1524,13 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
             const isAdmin = (userGuild.permissions & 0x8) === 0x8;
             hasAccess = hasAllowedRole || isAdmin;
-            
-            console.log('🔍 Controllo permessi con impostazioni:', {
-                hasAllowedRole,
-                isAdmin,
-                allowedRoles,
-                userRoles
-            });
         } else {
-            // Se non ci sono impostazioni, solo admin può accedere
             hasAccess = (userGuild.permissions & 0x8) === 0x8;
-            console.log('ℹ️ Nessuna impostazione, solo admin:', hasAccess);
         }
 
         if (!hasAccess) {
             return res.status(403).send('Accesso negato a questo server');
         }
-
 
         // RECUPERA I DATI
         const transcriptDir = path.join(__dirname, 'transcripts');
@@ -1841,26 +1546,6 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             'SELECT * FROM tickets WHERE guild_id = $1 AND status = $2 ORDER BY created_at DESC',
             [guildId, 'open']
         );
-
-        // DEBUG DETTAGLIATO
-        console.log('📊 DEBUG TRANSCRIPT PAGE:');
-        console.log('- Guild ID:', guildId);
-        console.log('- Ticket aperti trovati:', openTickets.rows.length);
-        console.log('- Ticket chiusi trovati:', closedTickets.rows.length);
-        
-        if (openTickets.rows.length > 0) {
-            console.log('📖 Ticket aperti:');
-            openTickets.rows.forEach(ticket => {
-                console.log(`   ID: ${ticket.id}, User: ${ticket.user_id}, Type: ${ticket.ticket_type}, Channel: ${ticket.channel_id}`);
-            });
-        }
-        
-        if (closedTickets.rows.length > 0) {
-            console.log('📖 Ticket chiusi:');
-            closedTickets.rows.forEach(ticket => {
-                console.log(`   ID: ${ticket.id}, User: ${ticket.user_id}, Type: ${ticket.ticket_type}`);
-            });
-        }
 
         // Transcript disponibili
         let availableTranscripts = [];
