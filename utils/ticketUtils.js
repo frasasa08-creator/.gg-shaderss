@@ -13,7 +13,6 @@ const {
 const fs = require('fs');
 const path = require('path');
 const transcriptDir = path.join(__dirname, '..', 'transcripts');
-
 // Import del database
 let db;
 try {
@@ -30,28 +29,31 @@ try {
  */
 async function cleanupOldTranscripts(days = 7) {
     if (!fs.existsSync(transcriptDir)) return;
+
     const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
     let deletedCount = 0;
+
     try {
         const files = fs.readdirSync(transcriptDir);
-       
+        
         for (const file of files) {
             if (!file.endsWith('.html') || file === '.gitkeep') continue;
-           
+            
             const filePath = path.join(transcriptDir, file);
             const stats = fs.statSync(filePath);
-           
+            
             if (stats.mtimeMs < cutoffTime) {
                 fs.unlinkSync(filePath);
                 deletedCount++;
-                console.log(`Transcript eliminato (auto): ${file}`);
+                console.log(`🗑️ Transcript eliminato (auto): ${file}`);
             }
         }
+
         if (deletedCount > 0) {
-            console.log(`Pulizia completata: ${deletedCount} transcript eliminati`);
+            console.log(`✅ Pulizia completata: ${deletedCount} transcript eliminati`);
         }
     } catch (error) {
-        console.error('Errore pulizia automatica transcript:', error);
+        console.error('❌ Errore pulizia automatica transcript:', error);
     }
 }
 
@@ -86,6 +88,7 @@ async function createTicket(interaction, optionValue) {
                 console.log(`Ticket aperto valido trovato: ${ticket.id}`);
             }
         }
+
         if (hasValidOpenTicket && validOpenTicket) {
             const existingChannel = guild.channels.cache.get(validOpenTicket.channel_id);
             return await interaction.editReply({
@@ -129,6 +132,7 @@ async function createTicket(interaction, optionValue) {
             type: ChannelType.GuildText,
             parent: category
         });
+
         await ticketChannel.lockPermissions();
         await ticketChannel.permissionOverwrites.edit(user.id, {
             ViewChannel: true,
@@ -143,7 +147,7 @@ async function createTicket(interaction, optionValue) {
             'INSERT INTO tickets (guild_id, user_id, channel_id, ticket_type, status, channel_name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
             [guild.id, user.id, ticketChannel.id, selectedOption.name, 'open', ticketChannel.name]
         );
-        let ticketId = ticketResult.rows[0].id;
+        const ticketId = ticketResult.rows[0].id;
 
         // Embed benvenuto
         const welcomeEmbed = new EmbedBuilder()
@@ -182,15 +186,16 @@ async function createTicket(interaction, optionValue) {
                     components: [new ActionRowBuilder().addComponents(newSelectMenu)]
                 });
             }
-        } catch (e) {
+        } catch (e) { 
             console.log('Impossibile resettare menu:', e.message);
         }
+
     } catch (error) {
         console.error('Errore creazione ticket:', error);
-        try {
-            await interaction.editReply({ content: `Errore: ${error.message}` });
-        } catch {
-            console.log('Impossibile rispondere');
+        try { 
+            await interaction.editReply({ content: `Errore: ${error.message}` }); 
+        } catch { 
+            console.log('Impossibile rispondere'); 
         }
     }
 }
@@ -215,20 +220,24 @@ async function showCloseTicketModal(interaction) {
         await interaction.showModal(modal);
     } catch (error) {
         console.error('Errore modal:', error);
-        try {
-            await interaction.reply({ content: 'Errore form chiusura.', flags: 64 });
-        } catch {
-            console.log('Impossibile rispondere');
+        try { 
+            await interaction.reply({ content: 'Errore form chiusura.', flags: 64 }); 
+        } catch { 
+            console.log('Impossibile rispondere'); 
         }
     }
 }
 
 async function closeTicketWithReason(interaction) {
     try {
-        console.log('=== DEBUG CHIUSURA TICKET ===');
-        console.log('Server:', interaction.guild?.name);
-        console.log('Channel:', interaction.channel?.name);
-
+        console.log('🔴 === DEBUG CHIUSURA TICKET ===');
+        console.log('📋 DATI SERVER:');
+        console.log('   - Server Name:', interaction.guild?.name);
+        console.log('   - Server ID:', interaction.guild?.id);
+        console.log('   - Bot Permissions:', interaction.guild?.members.me?.permissions);
+        console.log('   - Channel Name:', interaction.channel?.name);
+        console.log('   - Channel Type:', interaction.channel?.type);
+        
         await interaction.deferReply({ flags: 64 });
         const reason = interaction.fields.getTextInputValue('close_reason');
         const channel = interaction.channel;
@@ -247,46 +256,121 @@ async function closeTicketWithReason(interaction) {
         const transcript = await generateOblivionBotTranscript(channel, ticket.id);
         console.log(`Transcript generato.`);
 
-        // === SALVA TRANSCRIPT ===
+        // === SALVA TRANSCRIPT CON NOME CANALE E SERVER ID ===
+         
+        console.log(`📁 Percorso cartella transcripts: ${transcriptDir}`);
+
+        // Crea la cartella se non esiste
         if (!fs.existsSync(transcriptDir)) {
-            fs.mkdirSync(transcriptDir, { recursive: true });
+            console.log('📁 Creazione cartella transcripts...');
+            try {
+                fs.mkdirSync(transcriptDir, { recursive: true });
+                console.log('✅ Cartella transcripts creata');
+            } catch (error) {
+                console.error('❌ Errore creazione cartella:', error);
+            }
+        } else {
+            console.log('✅ Cartella transcripts già esistente');
         }
 
+        // === DEBUG PRIMA DI SALVARE ===
+        console.log('📁 DEBUG SALVATAGGIO:');
+        console.log('   - Transcript Dir:', transcriptDir);
+        console.log('   - Dir exists:', fs.existsSync(transcriptDir));
+
+        // Prova a creare un file di test
+        const testFile = path.join(transcriptDir, `test-${Date.now()}.txt`);
+        try {
+            fs.writeFileSync(testFile, `Test ${new Date().toISOString()}`);
+            console.log('   - Test file created:', fs.existsSync(testFile));
+        } catch (testError) {
+            console.log('   - Test file ERROR:', testError.message);
+        }
+
+        // Recupera il tipo di ticket e l'utente creatore dal database
         const ticketType = ticket.ticket_type.toLowerCase().replace(/\s+/g, '-');
-        let ticketCreatorUser = { username: 'unknown' };
+
+        // Recupera l'utente che ha CREATO il ticket
+        let ticketCreatorUser = null;
         try {
             ticketCreatorUser = await interaction.client.users.fetch(ticket.user_id);
         } catch (error) {
-            console.log('Impossibile recuperare utente creatore:', ticket.user_id);
+            console.log('❌ Impossibile recuperare utente creatore:', ticket.user_id);
+            ticketCreatorUser = { username: 'unknown' };
         }
+
         const username = ticketCreatorUser.username.toLowerCase().replace(/[^a-z0-9]/g, '');
         const timestamp = Date.now().toString().slice(-8);
-        const guildId = ticket.guild_id;
+        const guildId = ticket.guild_id;  // Questo è l'ID del server originale del ticket
+        console.log(`🎯 Server ID ticket: ${guildId} (originale)`);
+        console.log(`🎯 Server ID bot: ${interaction.guild.id} (attuale)`);
 
+        console.log(`📝 Creazione nome file transcript:`);
+        console.log(`   - Tipo ticket: ${ticketType}`);
+        console.log(`   - Utente: ${username}`);
+        console.log(`   - Timestamp: ${timestamp}`);
+        console.log(`   - Server ID: ${guildId}`);
+
+        // FORMATO STANDARD: ticket-{tipo}-{username}-{timestamp}-{serverId}.html
         const uniqueName = `ticket-${ticketType}-${username}-${timestamp}-${guildId}`;
         const transcriptPath = path.join(transcriptDir, `${uniqueName}.html`);
+        
+        // === SALVA IL FILE CON VERIFICA ===
+        console.log('🔍 Informazioni transcript:');
+        console.log('   - Tipo:', typeof transcript.attachment);
+        console.log('   - È Buffer?', Buffer.isBuffer(transcript.attachment));
+        console.log('   - È stringa?', typeof transcript.attachment === 'string');
+        console.log('   - Lunghezza:', transcript.attachment?.length);
 
-        let fileContent = transcript.attachment;
-        if (!Buffer.isBuffer(fileContent)) {
-            fileContent = Buffer.from(fileContent, 'utf-8');
+        // Converti in Buffer se necessario
+        let fileContent;
+        if (Buffer.isBuffer(transcript.attachment)) {
+            fileContent = transcript.attachment;
+        } else if (typeof transcript.attachment === 'string') {
+            fileContent = Buffer.from(transcript.attachment, 'utf-8');
+        } else {
+            console.log('❌ Tipo di attachment non supportato:', typeof transcript.attachment);
+            // Crea un contenuto di fallback
+            fileContent = Buffer.from(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Transcript Error</title></head>
+                <body>
+                    <h1>Errore Generazione Transcript</h1>
+                    <p>Ticket: ${ticket.id}</p>
+                    <p>Canale: ${channel.name}</p>
+                    <p>Data: ${new Date().toISOString()}</p>
+                </body>
+                </html>
+            `, 'utf-8');
         }
 
+        // Salva il file
         try {
             fs.writeFileSync(transcriptPath, fileContent);
-            console.log(`Transcript salvato: ${transcriptPath}`);
+            console.log(`✅ Transcript salvato: ${transcriptPath}`);
+            
+            // Verifica immediata
+            if (fs.existsSync(transcriptPath)) {
+                const stats = fs.statSync(transcriptPath);
+                console.log(`✅ Verificato: ${stats.size} bytes`);
+            } else {
+                console.log(`❌ ERRORE CRITICO: File non creato!`);
+            }
         } catch (error) {
-            console.log(`Errore salvataggio:`, error.message);
+            console.log(`❌ Errore salvataggio:`, error.message);
         }
 
         const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${uniqueName}`;
 
         // === INVIO DM CON LINK ===
         let ticketCreator = null;
-        try {
-            ticketCreator = await interaction.client.users.fetch(ticket.user_id);
-        } catch (error) {
-            console.log('Utente non trovato:', ticket.user_id);
+        try { 
+            ticketCreator = await interaction.client.users.fetch(ticket.user_id); 
+        } catch (error) { 
+            console.log('Utente non trovato:', ticket.user_id); 
         }
+
         if (ticketCreator) {
             try {
                 const dmEmbed = new EmbedBuilder()
@@ -303,7 +387,7 @@ async function closeTicketWithReason(interaction) {
                     .setColor(0x0099ff)
                     .setTimestamp()
                     .setFooter({ text: `Disponibile per 7 giorni` });
-
+                
                 await ticketCreator.send({
                     content: '**Transcript chiuso:**',
                     embeds: [dmEmbed],
@@ -313,7 +397,7 @@ async function closeTicketWithReason(interaction) {
                                 .setLabel('Visualizza Transcript Online')
                                 .setStyle(ButtonStyle.Link)
                                 .setURL(transcriptUrl)
-                                .setEmoji('File')
+                                .setEmoji('📄')
                         )
                     ]
                 });
@@ -344,7 +428,7 @@ async function closeTicketWithReason(interaction) {
                         .setLabel('Visualizza Transcript')
                         .setStyle(ButtonStyle.Link)
                         .setURL(transcriptUrl)
-                        .setEmoji('Link')
+                        .setEmoji('🔗')
                 )
             ]
         });
@@ -368,7 +452,6 @@ async function closeTicketWithReason(interaction) {
                     )
                     .setColor(0xff0000)
                     .setTimestamp();
-
                 await logChannel.send({
                     content: '**Transcript:**',
                     embeds: [logEmbed],
@@ -378,7 +461,7 @@ async function closeTicketWithReason(interaction) {
                                 .setLabel('Apri Transcript')
                                 .setStyle(ButtonStyle.Link)
                                 .setURL(transcriptUrl)
-                                .setEmoji('Clipboard')
+                                .setEmoji('📋')
                         )
                     ]
                 });
@@ -408,8 +491,8 @@ async function closeTicketWithReason(interaction) {
         for (let i = 4; i >= 1; i--) {
             await new Promise(r => setTimeout(r, 1000));
             countdownEmbed.setDescription(`Canale eliminato in **${i}** second${i > 1 ? 'i' : 'o'}...`);
-            try {
-                await msg.edit({ embeds: [countdownEmbed] });
+            try { 
+                await msg.edit({ embeds: [countdownEmbed] }); 
             } catch (error) {
                 console.log('Errore aggiornamento countdown:', error.message);
             }
@@ -417,12 +500,13 @@ async function closeTicketWithReason(interaction) {
         setTimeout(async () => {
             if (channel.deletable) await channel.delete('Ticket chiuso');
         }, 1000);
+
     } catch (error) {
         console.error('Errore chiusura:', error);
-        try {
-            await interaction.editReply({ content: `Errore: ${error.message}` });
-        } catch {
-            console.log('Impossibile rispondere');
+        try { 
+            await interaction.editReply({ content: `Errore: ${error.message}` }); 
+        } catch { 
+            console.log('Impossibile rispondere'); 
         }
     }
 }
@@ -478,11 +562,14 @@ async function generateOblivionBotMessagesHTML(channel) {
 </discord-message>`;
         }
         let messagesHTML = '';
+
         for (const message of sortedMessages) {
             const messageId = `m-${message.id}`;
             const isBot = message.author.bot;
             const timestamp = message.createdAt.toISOString();
+
             let messageContent = message.content || '';
+
             messageContent = processMentions(messageContent, guild);
             messageContent = convertMarkdownToHTML(messageContent);
             messageContent = messageContent.replace(/<:(\w+):(\d+)>/g,
@@ -491,11 +578,13 @@ async function generateOblivionBotMessagesHTML(channel) {
             messageContent = messageContent.replace(/<a:(\w+):(\d+)>/g,
                 '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">'
             );
+
             const authorId = message.author.id;
             const authorName = message.author.username;
             const authorAvatar = message.author.displayAvatarURL({ extension: 'webp', size: 64 });
             const roleColor = isBot ? '#5865F2' : undefined;
             const roleName = isBot ? 'BOT' : undefined;
+
             const profileScript = `
 <script>
 if (!window.$discordMessage.profiles["${authorId}"]) {
@@ -509,6 +598,7 @@ if (!window.$discordMessage.profiles["${authorId}"]) {
     };
 }
 </script>`;
+
             if (message.content && !message.embeds.length && !message.components.length) {
                 messagesHTML += `${profileScript}
 <discord-message id="${messageId}" timestamp="${timestamp}" profile="${authorId}">
@@ -518,24 +608,30 @@ ${messageContent}
             else if (message.embeds.length > 0) {
                 messagesHTML += `${profileScript}
 <discord-message id="${messageId}" timestamp="${timestamp}" profile="${authorId}">`;
+
                 if (message.content) messagesHTML += `${messageContent}`;
+
                 message.embeds.forEach(embed => {
                     const embedColor = embed.hexColor || '#0099ff';
                     let embedTitle = embed.title || '';
                     let embedDescription = embed.description || '';
                     let embedFooter = embed.footer?.text || '';
+
                     embedTitle = processMentions(embedTitle, guild);
                     embedDescription = processMentions(embedDescription, guild);
                     embedFooter = processMentions(embedFooter, guild);
+
                     embedTitle = convertMarkdownToHTML(embedTitle);
                     embedDescription = convertMarkdownToHTML(embedDescription);
                     embedFooter = convertMarkdownToHTML(embedFooter);
+
                     embedTitle = embedTitle.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
                     embedTitle = embedTitle.replace(/<a:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
                     embedDescription = embedDescription.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
                     embedDescription = embedDescription.replace(/<a:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
                     embedFooter = embedFooter.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin: 0 1px;" class="discord-custom-emoji">');
                     embedFooter = embedFooter.replace(/<a:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.gif" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin: 0 1px;" class="discord-custom-emoji">');
+
                     messagesHTML += `
 <discord-embed slot="embeds" color="${embedColor}"${embed.image ? ` image="${embed.image.url}"` : ''}>
 ${embedTitle ? `<discord-embed-title slot="title">${embedTitle}</discord-embed-title>` : ''}
@@ -543,23 +639,30 @@ ${embedDescription ? `<discord-embed-description slot="description">${embedDescr
 ${embed.footer ? `<discord-embed-footer slot="footer"${embed.footer.iconURL ? ` footer-image="${embed.footer.iconURL}"` : ''}>${embedFooter}</discord-embed-footer>` : ''}
 </discord-embed>`;
                 });
+
                 messagesHTML += `\n</discord-message>`;
             }
             else if (message.components.length > 0) {
                 messagesHTML += `${profileScript}
 <discord-message id="${messageId}" timestamp="${timestamp}" profile="${authorId}">`;
+
                 if (message.content) messagesHTML += `${messageContent}`;
+
                 if (message.embeds.length > 0) {
                     message.embeds.forEach(embed => {
                         const embedColor = embed.hexColor || '#5865f2';
                         let embedTitle = embed.title || '';
                         let embedDescription = embed.description || '';
+
                         embedTitle = processMentions(embedTitle, guild);
                         embedDescription = processMentions(embedDescription, guild);
+
                         embedTitle = convertMarkdownToHTML(embedTitle);
                         embedDescription = convertMarkdownToHTML(embedDescription);
+
                         embedTitle = embedTitle.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
                         embedDescription = embedDescription.replace(/<:(\w+):(\d+)>/g, '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 20px; height: 20px; vertical-align: middle; margin: 0 2px;" class="discord-custom-emoji">');
+
                         messagesHTML += `
 <discord-embed embed-title="${embedTitle || 'Ticket Control Panel'}" slot="embeds" color="${embedColor}">
 <discord-embed-description slot="description">${embedDescription || 'Choose an action to perform on the ticket'}</discord-embed-description>
@@ -567,11 +670,14 @@ ${embed.footer ? `<discord-embed-footer slot="footer"${embed.footer.iconURL ? ` 
 </discord-embed>`;
                     });
                 }
+
                 messagesHTML += `
 <discord-attachments slot="components">`;
+
                 message.components.forEach(componentRow => {
                     messagesHTML += `
 <discord-action-row>`;
+
                     componentRow.components.forEach(component => {
                         if (component.type === 'BUTTON') {
                             const buttonType = getOblivionBotButtonType(component.style);
@@ -579,13 +685,16 @@ ${embed.footer ? `<discord-embed-footer slot="footer"${embed.footer.iconURL ? ` 
                             buttonLabel = buttonLabel.replace(/<:(\w+):(\d+)>/g,
                                 '<img src="https://cdn.discordapp.com/emojis/$2.png" alt="$1" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;" class="discord-custom-emoji">'
                             );
+
                             messagesHTML += `
 <discord-button type="${buttonType}" emoji="${component.emoji?.url || 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f512.svg'}">${buttonLabel}</discord-button>`;
                         }
                     });
+
                     messagesHTML += `
 </discord-action-row>`;
                 });
+
                 messagesHTML += `
 </discord-attachments>
 </discord-message>`;
@@ -674,24 +783,13 @@ c&&c.addEventListener("click",()=>{navigator.clipboard.writeText(i),contextMenu.
 </body>
 </html>`;
 
-        // === AGGIUNGI BOTTONE "RISPONDI IN CHAT WEB" ===
-        const webChatUrl = `https://gg-shaderss.onrender.com/ticket/${ticketId}`;
-        const webChatButton = `
-        <div style="text-align:center; margin: 30px 0; padding: 15px; background: #2f3136; border-radius: 8px; border: 1px solid #40444b;">
-            <p style="margin:0 0 10px; color:#dcddde; font-size:14px;">Hai bisogno di rispondere in tempo reale?</p>
-            <button onclick="window.open('${webChatUrl}', '_blank')"
-                    style="background:#5865f2; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; font-size:14px;">
-                Chat Web in Tempo Reale
-            </button>
-            <p style="margin:5px 0 0; font-size:12px; color:#72767d;">
-                Solo staff autorizzato • Aggiornamento live
-            </p>
-        </div>`;
-
-        const finalHtml = htmlContent.replace('</body>', `${webChatButton}</body>`);
+        console.log('📄 Transcript generato:');
+        console.log('   - Lunghezza HTML:', htmlContent.length);
+        console.log('   - Tipo attachment:', typeof Buffer.from(htmlContent, 'utf-8'));
+        console.log('   - È Buffer?', Buffer.isBuffer(Buffer.from(htmlContent, 'utf-8')));
 
         return {
-            attachment: Buffer.from(finalHtml, 'utf-8'),
+            attachment: Buffer.from(htmlContent, 'utf-8'),
             name: `${channel.name}.html`
         };
     } catch (error) {
@@ -735,10 +833,9 @@ document.addEventListener("click",t=>{let e=t.target;if(!e)return;e.offsetParent
 <footer>Generato il <time>${new Date().toLocaleString('it-IT')}</time></footer>
 </body>
 </html>`;
-
     return {
         attachment: Buffer.from(fallbackHTML, 'utf-8'),
-        name: `${channel.name}.html`
+        name: `transcript-error-${ticketId}.html`
     };
 }
 
@@ -797,5 +894,5 @@ module.exports = {
     generateTranscript,
     generateOblivionBotTranscript,
     saveTicketMessage,
-    cleanupOldTranscripts
+    cleanupOldTranscripts 
 };
