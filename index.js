@@ -2982,7 +2982,7 @@ app.get('/', (req, res) => {
 let server;
 try {
     const server = app.listen(PORT, () => {
-    console.log(\`Server web su http://localhost:${PORT}\`);
+    console.log("Server web su http://localhost:" + PORT);
     });
     
     // WebSocket su stesso server
