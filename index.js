@@ -89,9 +89,19 @@ function extractServerIdFromFilename(filename) {
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
+// Usa la porta di Render invece di 10000
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server avviato sulla porta ${PORT}`);
+    console.log(`🌐 URL: http://0.0.0.0:${PORT}`);
+    console.log(`🫀 Health check: http://0.0.0.0:${PORT}/health`);
+});
+
+
+// Chiudi gracefully
+process.on('SIGTERM', () => {
+    console.log('🔄 Ricevuto SIGTERM, shutdown...');
+    process.exit(0);
 });
 
 // === MIDDLEWARE IN ORDINE CORRETTO ===
@@ -334,19 +344,13 @@ app.get('/logout', (req, res) => {
 
 // === ROTTE PUBBLICHE ===
 app.get('/health', (req, res) => {
-    if (client && client.isReady()) {
-        res.status(200).json({
-            status: 'ok',
-            bot: 'online',
-            timestamp: new Date().toISOString()
-        });
-    } else {
-        res.status(503).json({
-            status: 'error',
-            bot: 'offline',
-            timestamp: new Date().toISOString()
-        });
-    }
+    // ✅ SEMPRE 200 OK - il sito web funziona anche se il bot è in avvio
+    res.status(200).json({
+        status: 'ok',
+        bot: client && client.isReady() ? 'online' : 'starting',
+        timestamp: new Date().toISOString(),
+        service: 'GG-Shaderss Web Service'
+    });
 });
 
 app.get('/api/status', (req, res) => {
