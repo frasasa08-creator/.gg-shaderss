@@ -409,10 +409,10 @@ app.post('/api/ticket/send-message', async (req, res) => {
         console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}`);
 
         // 1. Cerca il ticket (usa la tua tabella tickets esistente)
-        const ticketResult = await db.query(
-            'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1',
-            [ticketId]
-        );
+        const messageResult = await db.query(
+        'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
+        [ticketId, username, message]
+    );
         
         if (ticketResult.rows.length === 0) {
             return res.status(404).json({ error: 'Ticket non trovato' });
@@ -456,7 +456,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
         console.log(`📥 Richiesta messaggi per ticket: ${ticketId}`);
         
         const result = await db.query(
-            'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY timestamp ASC',
+            'SELECT * FROM messages WHERE ticket_id::text = $1 ORDER BY timestamp ASC',
             [ticketId]
         );
         
@@ -1002,156 +1002,220 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     </div>
 
     <script>
-        const ticketId = '${ticket.id}';
-        const channelId = '${ticket.channel_id}';
-        let chatInterval = null;
-
-        // Elementi DOM
-        const messagesContainer = document.getElementById('messagesContainer');
-        const messageInput = document.getElementById('messageInput');
-        const sendButton = document.getElementById('sendButton');
-
-        // Auto-resize textarea
-        messageInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-            
-            // Abilita/disabilita pulsante invio
-            sendButton.disabled = this.value.trim() === '';
-        });
-
-        // Invio messaggio con Enter (senza Shift)
-        messageInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
-        // Invio messaggio con click
-        sendButton.addEventListener('click', sendMessage);
-
-        // Carica messaggi
-        async function loadMessages() {
-            try {
-                const response = await fetch('/api/ticket/' + ticketId + '/messages');
-                const messages = await response.json();
-                displayMessages(messages);
-            } catch (error) {
-                console.error('Errore caricamento messaggi:', error);
-            }
-        }
-
-        // Mostra messaggi nell'interfaccia
-        function displayMessages(messages) {
-            if (messages.length === 0) {
-                messagesContainer.innerHTML = \`
-                    <div class="empty-state">
-                        <i class="fas fa-comments"></i>
-                        <h3>Nessun messaggio ancora</h3>
-                        <p>Inizia la conversazione inviando un messaggio!</p>
-                    </div>
-                \`;
-                return;
-            }
-
-            messagesContainer.innerHTML = messages.map(msg => \`
-                <div class="message" data-message-id="\${msg.id}">
-                    <div class="message-avatar">
-                        \${msg.username.charAt(0).toUpperCase()}
-                    </div>
-                    <div class="message-content">
-                        <div class="message-header">
-                            <span class="message-author">\${msg.username}</span>
-                            <span class="staff-badge">STAFF</span>
-                            <span class="message-timestamp">\${new Date(msg.timestamp).toLocaleString('it-IT')}</span>
-                        </div>
-                        <div class="message-text">\${msg.content}</div>
-                    </div>
-                </div>
-            \`).join('');
-
-            // Scroll automatico all'ultimo messaggio
-            scrollToBottom();
-        }
-
-        // Invia messaggio
-        async function sendMessage() {
-            const message = messageInput.value.trim();
-            
-            if (!message) return;
-            
-            try {
-                // Disabilita input durante l'invio
-                messageInput.disabled = true;
-                sendButton.disabled = true;
-                sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio...';
-
-                const response = await fetch('/api/ticket/send-message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        ticketId: ticketId,
-                        channelId: channelId,
-                        message: message
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    // Pulisci input
-                    messageInput.value = '';
-                    messageInput.style.height = 'auto';
-                    
-                    // Ricarica messaggi
-                    await loadMessages();
-                } else {
-                    alert('Errore nell\'invio del messaggio: ' + result.error);
-                }
-            } catch (error) {
-                console.error('Errore invio messaggio:', error);
-                alert('Errore di connessione');
-            } finally {
-                // Riabilita input
-                messageInput.disabled = false;
-                sendButton.disabled = true;
-                sendButton.innerHTML = '<i class="fas fa-paper-plane"></i> Invia';
-                messageInput.focus();
-            }
-        }
-
-        // Scroll automatico in fondo
-        function scrollToBottom() {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        // Aggiornamento in tempo reale
-        function startChatUpdates() {
-            loadMessages();
-            chatInterval = setInterval(loadMessages, 2000); // Aggiorna ogni 2 secondi
-        }
-
-        // Ferma aggiornamenti quando la pagina non è visibile
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                clearInterval(chatInterval);
-            } else {
-                startChatUpdates();
-            }
-        });
-
-        // Inizializzazione
-        document.addEventListener('DOMContentLoaded', function() {
-            startChatUpdates();
-            messageInput.focus();
-            
-            // Scroll iniziale in fondo
-            setTimeout(scrollToBottom, 100);
-        });
-    </script>
+      const ticketId = '${ticket.id}';
+      const channelId = '${ticket.channel_id}';
+      let chatInterval = null;
+  
+      // Elementi DOM
+      const messagesContainer = document.getElementById('messagesContainer');
+      const messageInput = document.getElementById('messageInput');
+      const sendButton = document.getElementById('sendButton');
+  
+      // ✅ CORREZIONE 1: Auto-resize e abilitazione pulsante
+      messageInput.addEventListener('input', function() {
+          this.style.height = 'auto';
+          this.style.height = (this.scrollHeight) + 'px';
+          
+          // ✅ Abilita/disabilita pulsante invio CORRETTAMENTE
+          sendButton.disabled = this.value.trim() === '';
+          
+          // ✅ Aggiorna visivamente il pulsante
+          if (sendButton.disabled) {
+              sendButton.style.opacity = '0.6';
+              sendButton.style.cursor = 'not-allowed';
+          } else {
+              sendButton.style.opacity = '1';
+              sendButton.style.cursor = 'pointer';
+          }
+      });
+  
+      // ✅ CORREZIONE 2: Invio messaggio con Enter (SENZA Shift)
+      messageInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault(); // ✅ IMPEDISCE ANDATA A CAPO
+              if (!sendButton.disabled) {
+                  sendMessage();
+              }
+          }
+      });
+  
+      // ✅ CORREZIONE 3: Invio messaggio con click
+      sendButton.addEventListener('click', function() {
+          if (!sendButton.disabled) {
+              sendMessage();
+          }
+      });
+  
+      // ✅ CORREZIONE 4: Funzione migliorata per caricare messaggi
+      async function loadMessages() {
+          try {
+              console.log('🔄 Caricamento messaggi per ticket:', ticketId);
+              const response = await fetch(`/api/ticket/${ticketId}/messages`);
+              
+              if (!response.ok) {
+                  throw new Error(`Errore HTTP: ${response.status}`);
+              }
+              
+              const messages = await response.json();
+              console.log(`✅ Trovati ${messages.length} messaggi`);
+              displayMessages(messages);
+          } catch (error) {
+              console.error('❌ Errore caricamento messaggi:', error);
+          }
+      }
+  
+      // ✅ CORREZIONE 5: Mostra messaggi nell'interfaccia
+      function displayMessages(messages) {
+          if (messages.length === 0) {
+              messagesContainer.innerHTML = `
+                  <div class="empty-state">
+                      <i class="fas fa-comments"></i>
+                      <h3>Nessun messaggio ancora</h3>
+                      <p>Inizia la conversazione inviando un messaggio!</p>
+                  </div>
+              `;
+              return;
+          }
+  
+          messagesContainer.innerHTML = messages.map(msg => `
+              <div class="message" data-message-id="${msg.id}">
+                  <div class="message-avatar">
+                      ${msg.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div class="message-content">
+                      <div class="message-header">
+                          <span class="message-author">${msg.username}</span>
+                          <span class="staff-badge">STAFF</span>
+                          <span class="message-timestamp">${new Date(msg.timestamp).toLocaleString('it-IT')}</span>
+                      </div>
+                      <div class="message-text">${msg.content}</div>
+                  </div>
+              </div>
+          `).join('');
+  
+          // Scroll automatico all'ultimo messaggio
+          scrollToBottom();
+      }
+  
+      // ✅ CORREZIONE 6: Funzione migliorata per inviare messaggi
+      async function sendMessage() {
+          const message = messageInput.value.trim();
+          
+          if (!message || sendButton.disabled) {
+              return;
+          }
+          
+          try {
+              // Salva il testo prima di disabilitare
+              const messageToSend = message;
+              
+              // ✅ Disabilita input durante l'invio
+              messageInput.disabled = true;
+              sendButton.disabled = true;
+              sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio...';
+              sendButton.style.opacity = '0.6';
+              sendButton.style.cursor = 'not-allowed';
+  
+              console.log('📨 Invio messaggio:', messageToSend);
+              
+              const response = await fetch('/api/ticket/send-message', {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                      ticketId: ticketId,
+                      channelId: channelId,
+                      message: messageToSend
+                  })
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                  // ✅ Pulisci input e reset
+                  messageInput.value = '';
+                  messageInput.style.height = 'auto';
+                  
+                  // ✅ Ricarica messaggi immediatamente
+                  await loadMessages();
+                  
+                  console.log('✅ Messaggio inviato con successo');
+              } else {
+                  alert('❌ Errore nell\'invio del messaggio: ' + (result.error || 'Errore sconosciuto'));
+              }
+          } catch (error) {
+              console.error('❌ Errore invio messaggio:', error);
+              alert('❌ Errore di connessione durante l\'invio');
+          } finally {
+              // ✅ Riabilita input CORRETTAMENTE
+              messageInput.disabled = false;
+              sendButton.disabled = true; // Inizialmente disabilitato
+              sendButton.innerHTML = '<i class="fas fa-paper-plane"></i> Invia';
+              sendButton.style.opacity = '0.6';
+              sendButton.style.cursor = 'not-allowed';
+              
+              // ✅ Rimetti il focus sull'input
+              messageInput.focus();
+          }
+      }
+  
+      // ✅ CORREZIONE 7: Scroll automatico in fondo
+      function scrollToBottom() {
+          setTimeout(() => {
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }, 100);
+      }
+  
+      // ✅ CORREZIONE 8: Aggiornamento in tempo reale MIGLIORATO
+      function startChatUpdates() {
+          // Carica immediatamente
+          loadMessages();
+          
+          // ✅ Aggiorna ogni 3 secondi (più frequente)
+          chatInterval = setInterval(loadMessages, 3000);
+          
+          console.log('🔄 Aggiornamento chat attivato (3s)');
+      }
+  
+      function stopChatUpdates() {
+          if (chatInterval) {
+              clearInterval(chatInterval);
+              chatInterval = null;
+              console.log('⏹️ Aggiornamento chat fermato');
+          }
+      }
+  
+      // ✅ CORREZIONE 9: Gestione visibilità pagina
+      document.addEventListener('visibilitychange', function() {
+          if (document.hidden) {
+              stopChatUpdates();
+          } else {
+              startChatUpdates();
+          }
+      });
+  
+      // ✅ CORREZIONE 10: Inizializzazione MIGLIORATA
+      document.addEventListener('DOMContentLoaded', function() {
+          console.log('🚀 Inizializzazione chat live per ticket:', ticketId);
+          
+          // Avvia aggiornamenti
+          startChatUpdates();
+          
+          // Focus sull'input
+          messageInput.focus();
+          
+          // Scroll iniziale in fondo
+          scrollToBottom();
+          
+          console.log('✅ Chat live inizializzata correttamente');
+      });
+  
+      // ✅ CORREZIONE 11: Gestione chiusura pagina
+      window.addEventListener('beforeunload', function() {
+          stopChatUpdates();
+      });
+  </script>
 </body>
 </html>
         `);
