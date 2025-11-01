@@ -31,6 +31,130 @@ const client = new Client({
     ],
 });
 
+// === SERVER EXPRESS PER RENDER ===
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// === MIDDLEWARE IN ORDINE CORRETTO ===
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// TRUST PROXY CRITICO per Render
+app.set('trust proxy', 1);
+
+// Session middleware - CONFIGURAZIONE DEFINITIVA per Render
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: true, // FORZA HTTPS
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 ore
+        sameSite: 'lax',
+        // RIMUOVI domain per permettere a Render di gestirlo
+    },
+    name: 'shaderss.sid', // Nome più semplice
+    store: new session.MemoryStore(),
+    rolling: true
+}));
+
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// DEBUG MIGLIORATO
+app.use((req, res, next) => {
+    console.log('🔍 SESSION DEBUG:', {
+        path: req.path,
+        authenticated: req.isAuthenticated(),
+        user: req.user?.username || 'Nessuno',
+        sessionId: req.sessionID,
+        cookies: req.headers.cookie ? 'Presenti' : 'Assenti',
+        'user-agent': req.headers['user-agent']
+    });
+    next();
+});
+
+// DEBUG: Verifica configurazione
+console.log('🔧 DEBUG Configurazione Session:');
+console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Presente' : 'MISSING!');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('Cookie secure:', true);
+console.log('Trust proxy:', 1);
+
+// Configurazione Passport con URL dinamico
+const getCallbackURL = () => {
+    let callbackURL;
+    
+    if (process.env.RENDER_EXTERNAL_URL) {
+        callbackURL = `${process.env.RENDER_EXTERNAL_URL}/auth/discord/callback`;
+    } else if (process.env.CALLBACK_URL) {
+        callbackURL = process.env.CALLBACK_URL;
+    } else {
+        callbackURL = `http://localhost:${PORT}/auth/discord/callback`;
+    }
+    
+    console.log('🌐 Callback URL generato:', callbackURL);
+    return callbackURL;
+};
+
+// Configurazione DiscordStrategy
+passport.use(new DiscordStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.DISCORD_CLIENT_SECRET,
+    callbackURL: getCallbackURL(),
+    scope: ['identify', 'guilds']
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        console.log('🔑 Utente autenticato con successo:', profile.username);
+        console.log('📋 Dati profile:', {
+            id: profile.id,
+            username: profile.username,
+            discriminator: profile.discriminator,
+            guilds: profile.guilds ? profile.guilds.length : 0
+        });
+        
+        return done(null, profile);
+    } catch (error) {
+        console.error('❌ Errore durante autenticazione:', error);
+        return done(error, null);
+    }
+}));
+
+// Serializzazione e deserializzazione
+passport.serializeUser((user, done) => {
+    console.log('💾 Serializzazione utente:', user.username);
+    done(null, user);
+});
+
+passport.deserializeUser((user, done) => {
+    console.log('📖 Deserializzazione utente:', user.username);
+    done(null, user);
+});
+
+// === MIDDLEWARE DI AUTENTICAZIONE GLOBALE ===
+function requireAuth(req, res, next) {
+    const publicRoutes = ['/auth/discord', '/auth/discord/callback', '/auth/failure', '/health', '/api/status', '/'];
+    
+    if (publicRoutes.includes(req.path)) {
+        return next();
+    }
+    
+    if (req.isAuthenticated()) {
+        console.log('✅ Utente autenticato:', req.user.username);
+        return next();
+    }
+    
+    console.log('❌ Utente NON autenticato, redirect a login');
+    req.session.returnTo = req.originalUrl;
+    res.redirect('/auth/discord');
+}
+
+// Applica il middleware a TUTTE le rotte
+app.use(requireAuth);
+
 // === ROTTA PER VERIFICARE STRUTTURA DATABASE ===
 app.get('/debug-database', async (req, res) => {
     try {
@@ -183,130 +307,6 @@ function extractServerIdFromFilename(filename) {
     console.log(`❌ Nessun Server ID trovato in: ${filename}`);
     return null;
 }
-
-// === SERVER EXPRESS PER RENDER ===
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// === MIDDLEWARE IN ORDINE CORRETTO ===
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// TRUST PROXY CRITICO per Render
-app.set('trust proxy', 1);
-
-// Session middleware - CONFIGURAZIONE DEFINITIVA per Render
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-production',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: true, // FORZA HTTPS
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000, // 24 ore
-        sameSite: 'lax',
-        // RIMUOVI domain per permettere a Render di gestirlo
-    },
-    name: 'shaderss.sid', // Nome più semplice
-    store: new session.MemoryStore(),
-    rolling: true
-}));
-
-// Passport middleware
-app.use(passport.initialize());
-app.use(passport.session());
-
-// DEBUG MIGLIORATO
-app.use((req, res, next) => {
-    console.log('🔍 SESSION DEBUG:', {
-        path: req.path,
-        authenticated: req.isAuthenticated(),
-        user: req.user?.username || 'Nessuno',
-        sessionId: req.sessionID,
-        cookies: req.headers.cookie ? 'Presenti' : 'Assenti',
-        'user-agent': req.headers['user-agent']
-    });
-    next();
-});
-
-// DEBUG: Verifica configurazione
-console.log('🔧 DEBUG Configurazione Session:');
-console.log('SESSION_SECRET:', process.env.SESSION_SECRET ? 'Presente' : 'MISSING!');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('Cookie secure:', true);
-console.log('Trust proxy:', 1);
-
-// Configurazione Passport con URL dinamico
-const getCallbackURL = () => {
-    let callbackURL;
-    
-    if (process.env.RENDER_EXTERNAL_URL) {
-        callbackURL = `${process.env.RENDER_EXTERNAL_URL}/auth/discord/callback`;
-    } else if (process.env.CALLBACK_URL) {
-        callbackURL = process.env.CALLBACK_URL;
-    } else {
-        callbackURL = `http://localhost:${PORT}/auth/discord/callback`;
-    }
-    
-    console.log('🌐 Callback URL generato:', callbackURL);
-    return callbackURL;
-};
-
-// Configurazione DiscordStrategy
-passport.use(new DiscordStrategy({
-    clientID: process.env.CLIENT_ID,
-    clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: getCallbackURL(),
-    scope: ['identify', 'guilds']
-}, async (accessToken, refreshToken, profile, done) => {
-    try {
-        console.log('🔑 Utente autenticato con successo:', profile.username);
-        console.log('📋 Dati profile:', {
-            id: profile.id,
-            username: profile.username,
-            discriminator: profile.discriminator,
-            guilds: profile.guilds ? profile.guilds.length : 0
-        });
-        
-        return done(null, profile);
-    } catch (error) {
-        console.error('❌ Errore durante autenticazione:', error);
-        return done(error, null);
-    }
-}));
-
-// Serializzazione e deserializzazione
-passport.serializeUser((user, done) => {
-    console.log('💾 Serializzazione utente:', user.username);
-    done(null, user);
-});
-
-passport.deserializeUser((user, done) => {
-    console.log('📖 Deserializzazione utente:', user.username);
-    done(null, user);
-});
-
-// === MIDDLEWARE DI AUTENTICAZIONE GLOBALE ===
-function requireAuth(req, res, next) {
-    const publicRoutes = ['/auth/discord', '/auth/discord/callback', '/auth/failure', '/health', '/api/status', '/'];
-    
-    if (publicRoutes.includes(req.path)) {
-        return next();
-    }
-    
-    if (req.isAuthenticated()) {
-        console.log('✅ Utente autenticato:', req.user.username);
-        return next();
-    }
-    
-    console.log('❌ Utente NON autenticato, redirect a login');
-    req.session.returnTo = req.originalUrl;
-    res.redirect('/auth/discord');
-}
-
-// Applica il middleware a TUTTE le rotte
-app.use(requireAuth);
 
 // === ROTTE DI AUTENTICAZIONE ===
 app.get('/auth/discord', (req, res, next) => {
