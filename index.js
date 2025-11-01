@@ -31,6 +31,14 @@ const client = new Client({
     ],
 });
 
+// Debug iniziale
+console.log('🔧 Avvio applicazione...');
+console.log('📋 Variabili ambiente:', {
+    NODE_ENV: process.env.NODE_ENV,
+    HAS_DISCORD_TOKEN: !!process.env.DISCORD_TOKEN,
+    HAS_DB_HOST: !!process.env.DB_HOST
+});
+
 // Avvia pulizia automatica all'avvio e ogni 24 ore
 async function startAutoCleanup() {
     try {
@@ -81,7 +89,10 @@ function extractServerIdFromFilename(filename) {
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server avviato sulla porta ${PORT}`);
+});
 
 // === MIDDLEWARE IN ORDINE CORRETTO ===
 app.use(express.json());
