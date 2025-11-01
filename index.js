@@ -392,68 +392,56 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// === API PER INVIARE MESSAGGI AI TICKET ===
-app.post('/api/ticket/send-message', checkStaffRole, async (req, res) => {
+app.post('/api/ticket/send-message', async (req, res) => {
     try {
-        const { ticketId, channelId, message } = req.body;
+        const { ticketId, message } = req.body;
         const userId = req.user.id;
 
-        if (!ticketId || !channelId || !message) {
-            return res.json({ success: false, message: 'Dati mancanti' });
+        // Trova il ticket
+        const ticket = await Ticket.findOne({ ticketId });
+        if (!ticket) {
+            return res.status(404).json({ error: 'Ticket non trovato' });
         }
 
-        // Verifica che il ticket esista
-        const ticketResult = await db.query(
-            'SELECT * FROM tickets WHERE id = $1 AND status = $2',
-            [ticketId, 'open']
-        );
-
-        if (ticketResult.rows.length === 0) {
-            return res.json({ success: false, message: 'Ticket non trovato o chiuso' });
+        // Verifica permessi
+        const hasAccess = await checkUserAccess(req.user, ticket.guildId);
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Accesso negato' });
         }
 
-        const ticket = ticketResult.rows[0];
-        const guild = client.guilds.cache.get(ticket.guild_id);
-
-        if (!guild) {
-            return res.json({ success: false, message: 'Server non trovato' });
-        }
-
-        const channel = guild.channels.cache.get(channelId);
-
+        // Trova il canale Discord
+        const channel = client.channels.cache.get(ticket.channelId);
         if (!channel) {
-            return res.json({ success: false, message: 'Canale ticket non trovato' });
+            return res.status(404).json({ error: 'Canale non trovato' });
         }
 
-        // Invia il messaggio nel canale ticket
-        const embed = new EmbedBuilder()
-            .setColor(0x0099ff)
-            .setAuthor({
-                name: `${req.user.username} (via Web Panel)`,
-                iconURL: req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'
-            })
-            .setDescription(message)
-            .setTimestamp()
-            .setFooter({ text: `Staff Response` });
+        // ✅ INVIA MESSAGGIO SEMPLICE - SENZA EMBED
+        await channel.send(`**${req.user.username}:** ${message}`);
 
-        await channel.send({ embeds: [embed] });
+        // Aggiorna il transcript
+        await updateTranscript(ticketId, req.user.username, message);
 
-        // Log dell'azione
-        console.log(`📝 Messaggio inviato da web: ${req.user.username} -> Ticket ${ticketId}`);
-
-        res.json({ 
-            success: true, 
-            message: 'Messaggio inviato con successo' 
-        });
+        res.json({ success: true });
 
     } catch (error) {
         console.error('❌ Errore invio messaggio ticket:', error);
-        res.json({ 
-            success: false, 
-            message: 'Errore interno del server' 
-        });
+        res.status(500).json({ error: 'Errore interno del server' });
     }
 });
+
+// Frontend - Aggiorna la chat ogni 2 secondi
+function aggiornaChat() {
+    fetch(`/api/ticket/${ticketId}/messages`)
+        .then(response => response.json())
+        .then(messages => {
+            // Aggiorna l'interfaccia chat
+            mostraMessaggi(messages);
+        });
+}
+
+// Aggiorna ogni 2 secondi
+setInterval(aggiornaChat, 2000);
+
 
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
 app.get('/transcript/:identifier', (req, res) => {
