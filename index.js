@@ -3013,10 +3013,15 @@ process.on('unhandledRejection', async (error) => {
 // Export client e db
 module.exports = { client, db };
 
-// Login bot
-client.login(process.env.DISCORD_TOKEN).catch(error => {
-    console.error('❌ Errore login bot:', error);
-    process.exit(1);
-});
+// LOGIN BOT
+console.log('🔐 Tentativo di login bot...');
+client.login(process.env.DISCORD_TOKEN)
+    .then(() => {
+        console.log('✅ Login bot avviato con successo');
+    })
+    .catch(error => {
+        console.error('❌ ERRORE LOGIN BOT:', error);
+        process.exit(1);
+    });
 
 console.log('File index.js caricato completamente');
