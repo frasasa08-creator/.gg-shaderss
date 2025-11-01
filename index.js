@@ -454,50 +454,169 @@ app.post('/api/ticket/send-message', async (req, res) => {
     }
 });
 
-let currentTicketId = null;
-let stopChatUpdate = null;
-
-// Quando apri un ticket
-function apriTicket(ticketId) {
-    currentTicketId = ticketId;
-    
-    // Ferma eventuali aggiornamenti precedenti
-    if (stopChatUpdate) {
-        stopChatUpdate();
-    }
-    
-    // Avvia aggiornamento per questo ticket
-    stopChatUpdate = initChat(ticketId);
-}
-
-// Funzione per inizializzare l'aggiornamento chat
-function initChat(ticketId) {
-    let isActive = true;
-    
-    async function aggiornaChat() {
-        if (!isActive || !ticketId) return;
-        
-        try {
-            const response = await fetch('/api/ticket/' + currentTicketId + '/messages');
-            const messages = await response.json();
-            aggiornaInterfacciaChat(messages);
-        } catch (error) {
-            console.error('Errore aggiornamento chat:', error);
+app.get('/transcripts/:ticketId', async (req, res) => {
+    try {
+        const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
+        if (!ticket) {
+            return res.status(404).send('Ticket non trovato');
         }
+
+        // Verifica permessi utente
+        const hasAccess = await checkUserAccess(req.user, ticket.guildId);
+        if (!hasAccess) {
+            return res.status(403).send('Accesso negato');
+        }
+
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Chat Ticket ${ticket.ticketId}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    #ticket-chat {
+                        border: 1px solid #ccc;
+                        border-radius: 8px;
+                        padding: 15px;
+                        max-width: 800px;
+                        margin: 20px auto;
+                    }
+                    #chat-messages {
+                        height: 500px;
+                        overflow-y: auto;
+                        border: 1px solid #eee;
+                        padding: 15px;
+                        margin-bottom: 15px;
+                        background: #f9f9f9;
+                    }
+                    .message {
+                        margin-bottom: 15px;
+                        padding: 10px;
+                        border-radius: 8px;
+                        background: white;
+                        border-left: 4px solid #5865F2;
+                    }
+                    .message strong {
+                        color: #5865F2;
+                    }
+                    .message small {
+                        color: #666;
+                        margin-left: 10px;
+                    }
+                    #chat-input {
+                        display: flex;
+                        gap: 10px;
+                    }
+                    #message-input {
+                        flex: 1;
+                        padding: 12px;
+                        border: 1px solid #ccc;
+                        border-radius: 8px;
+                        font-size: 16px;
+                    }
+                    button {
+                        padding: 12px 20px;
+                        background: #5865F2;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 16px;
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>Chat Ticket: ${ticket.ticketId}</h1>
+                <div id="ticket-chat">
+                    <div id="chat-messages"></div>
+                    <div id="chat-input">
+                        <input type="text" id="message-input" placeholder="Scrivi un messaggio...">
+                        <button onclick="sendMessage()">Invia</button>
+                    </div>
+                </div>
+
+                <script>
+                    const currentTicketId = '${ticket.ticketId}';
+                    let chatInterval = null;
+
+                    async function loadMessages() {
+                        try {
+                            // ✅ CORRETTO - CONCATENAZIONE DI STRINGHE
+                            const response = await fetch('/api/ticket/' + currentTicketId + '/messages');
+                            const messages = await response.json();
+                            displayMessages(messages);
+                        } catch (error) {
+                            console.error('Errore caricamento messaggi:', error);
+                        }
+                    }
+
+                    function displayMessages(messages) {
+                        const chatContainer = document.getElementById('chat-messages');
+                        chatContainer.innerHTML = '';
+                        
+                        messages.forEach(msg => {
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = 'message';
+                            messageDiv.innerHTML = '<strong>' + msg.user + ':</strong> ' + msg.content + '<small>' + new Date(msg.timestamp).toLocaleString() + '</small>';
+                            chatContainer.appendChild(messageDiv);
+                        });
+                        
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+
+                    async function sendMessage() {
+                        const input = document.getElementById('message-input');
+                        const message = input.value.trim();
+                        
+                        if (!message) return;
+                        
+                        try {
+                            const response = await fetch('/api/ticket/send-message', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    ticketId: currentTicketId,
+                                    message: message
+                                })
+                            });
+                            
+                            if (response.ok) {
+                                input.value = '';
+                                loadMessages();
+                            } else {
+                                alert('Errore invio messaggio');
+                            }
+                        } catch (error) {
+                            console.error('Errore invio messaggio:', error);
+                            alert('Errore di connessione');
+                        }
+                    }
+
+                    function startChatUpdates() {
+                        loadMessages();
+                        chatInterval = setInterval(loadMessages, 3000);
+                    }
+
+                    document.getElementById('message-input').addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            sendMessage();
+                        }
+                    });
+
+                    document.addEventListener('DOMContentLoaded', function() {
+                        startChatUpdates();
+                    });
+                </script>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('Errore caricamento transcript:', error);
+        res.status(500).send('Errore interno del server');
     }
-    
-    // Primo aggiornamento immediato
-    aggiornaChat();
-    
-    // Aggiorna ogni 3 secondi
-    const intervalId = setInterval(aggiornaChat, 3000);
-    
-    // Funzione per fermare l'aggiornamento
-    return () => {
-        isActive = false;
-        clearInterval(intervalId);
-    };
-}
+});
 
 // API per ottenere i messaggi di un ticket
 app.get('/api/ticket/:ticketId/messages', async (req, res) => {
@@ -523,6 +642,8 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
         res.status(500).json({ error: 'Errore interno del server' });
     }
 });
+
+
 
 // Nuova route per la chat live
 app.get('/chat/:ticketId', async (req, res) => {
