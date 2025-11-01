@@ -461,7 +461,11 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
 
 app.get('/transcripts/:ticketId', async (req, res) => {
     try {
-        const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
+        const result = await db.query(
+          'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1', 
+          [req.params.ticketId]
+      );
+      const ticket = result.rows[0];
         if (!ticket) {
             return res.status(404).send('Ticket non trovato');
         }
@@ -628,7 +632,11 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     try {
         const { ticketId } = req.params;
 
-        const ticket = await Ticket.findOne({ ticketId: ticketId });
+        const result = await db.query(
+          'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1', 
+          [req.params.ticketId]
+      );
+      const ticket = result.rows[0];
         if (!ticket) {
             return res.status(404).json({ error: 'Ticket non trovato' });
         }
@@ -653,7 +661,11 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
 // Nuova route per la chat live
 /*app.get('/chat/:ticketId', async (req, res) => {
     try {
-        const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
+        const result = await db.query(
+          'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1', 
+          [req.params.ticketId]
+      );
+      const ticket = result.rows[0];
         if (!ticket) {
             return res.status(404).send('Ticket non trovato');
         }
