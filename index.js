@@ -1,6 +1,3 @@
-ho gia rigenerato il token facciamo uan cosa ora ti mando il mio intero index e me lo rimandi completo ocn gli aggiustmanwti per farlo andare 
-
-
 // index.js
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
