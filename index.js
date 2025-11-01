@@ -392,6 +392,69 @@ app.get('/api/status', (req, res) => {
     }
 });
 
+// === API PER INVIARE MESSAGGI AI TICKET ===
+app.post('/api/ticket/send-message', checkStaffRole, async (req, res) => {
+    try {
+        const { ticketId, channelId, message } = req.body;
+        const userId = req.user.id;
+
+        if (!ticketId || !channelId || !message) {
+            return res.json({ success: false, message: 'Dati mancanti' });
+        }
+
+        // Verifica che il ticket esista
+        const ticketResult = await db.query(
+            'SELECT * FROM tickets WHERE id = $1 AND status = $2',
+            [ticketId, 'open']
+        );
+
+        if (ticketResult.rows.length === 0) {
+            return res.json({ success: false, message: 'Ticket non trovato o chiuso' });
+        }
+
+        const ticket = ticketResult.rows[0];
+        const guild = client.guilds.cache.get(ticket.guild_id);
+
+        if (!guild) {
+            return res.json({ success: false, message: 'Server non trovato' });
+        }
+
+        const channel = guild.channels.cache.get(channelId);
+
+        if (!channel) {
+            return res.json({ success: false, message: 'Canale ticket non trovato' });
+        }
+
+        // Invia il messaggio nel canale ticket
+        const embed = new EmbedBuilder()
+            .setColor(0x0099ff)
+            .setAuthor({
+                name: `${req.user.username} (via Web Panel)`,
+                iconURL: req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'
+            })
+            .setDescription(message)
+            .setTimestamp()
+            .setFooter({ text: `Staff Response` });
+
+        await channel.send({ embeds: [embed] });
+
+        // Log dell'azione
+        console.log(`📝 Messaggio inviato da web: ${req.user.username} -> Ticket ${ticketId}`);
+
+        res.json({ 
+            success: true, 
+            message: 'Messaggio inviato con successo' 
+        });
+
+    } catch (error) {
+        console.error('❌ Errore invio messaggio ticket:', error);
+        res.json({ 
+            success: false, 
+            message: 'Errore interno del server' 
+        });
+    }
+});
+
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
 app.get('/transcript/:identifier', (req, res) => {
     const identifier = req.params.identifier.toLowerCase();
@@ -728,8 +791,12 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
         const userGuilds = req.user.guilds || [];
         const accessibleGuilds = [];
 
-        // Trova tutti i server dove l'utente ha accesso ai transcript
+        // Trova tutti i server dove l'utente ha accesso + dove il bot è presente
         for (const guild of userGuilds) {
+            // Verifica se il bot è in questo server
+            const botGuild = client.guilds.cache.get(guild.id);
+            if (!botGuild) continue; // Salta se il bot non è nel server
+
             const result = await db.query(
                 'SELECT settings FROM guild_settings WHERE guild_id = $1',
                 [guild.id]
@@ -747,7 +814,8 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                         id: guild.id,
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
-                        memberCount: guild.approximate_member_count || 'N/A'
+                        memberCount: guild.approximate_member_count || 'N/A',
+                        botPresent: true
                     });
                 }
             } else {
@@ -758,15 +826,11 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                         id: guild.id,
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
-                        memberCount: guild.approximate_member_count || 'N/A'
+                        memberCount: guild.approximate_member_count || 'N/A',
+                        botPresent: true
                     });
                 }
             }
-        }
-
-        // Se c'è solo un server accessibile, redirect diretto
-        if (accessibleGuilds.length === 1) {
-            return res.redirect(`/transcripts/${accessibleGuilds[0].id}`);
         }
 
         // Se non ci sono server accessibili
@@ -783,7 +847,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                 </head>
                 <body>
                     <h1>❌ Nessun Server Accessibile</h1>
-                    <p>Non hai i permessi per visualizzare i transcript in nessun server.</p>
+                    <p>Non hai i permessi per visualizzare i transcript in nessun server dove il bot è presente.</p>
                     <a href="/" class="btn">Torna alla Home</a>
                 </body>
                 </html>
@@ -801,6 +865,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                     <div class="server-meta">
                         <span class="server-id">ID: ${guild.id}</span>
                         <span class="server-members"><i class="fas fa-users"></i> ${guild.memberCount}</span>
+                        <span class="bot-status"><i class="fas fa-robot"></i> Bot Online</span>
                     </div>
                 </div>
                 <div class="server-arrow">
@@ -828,6 +893,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
         :root {
             --primary: #5865F2;
             --primary-dark: #4752c4;
+            --success: #00ff88;
             --background: #0f0f12;
             --card-bg: #1a1a1d;
             --text-primary: #ffffff;
@@ -955,10 +1021,14 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
             color: var(--text-secondary);
         }
 
-        .server-members {
+        .server-members, .bot-status {
             display: flex;
             align-items: center;
             gap: 5px;
+        }
+
+        .bot-status {
+            color: var(--success);
         }
 
         .server-arrow {
@@ -1006,7 +1076,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     <div class="container">
         <div class="header">
             <h1><i class="fas fa-server"></i> Seleziona Server</h1>
-            <p>Scegli il server Discord di cui vuoi visualizzare i transcript</p>
+            <p>Scegli il server Discord di cui vuoi gestire i ticket</p>
             
             <div class="user-info">
                 <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
@@ -1040,7 +1110,7 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     }
 });
 
-// === ROTTA TRANSCRIPT PER SERVER SPECIFICO CON FILTRAGGIO FUNZIONANTE ===
+// === ROTTA COMPLETA PER GESTIONE TICKET ===
 app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
         const guildId = req.params.guildId;
@@ -1052,7 +1122,13 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // Verifica i permessi per questo server specifico
+        // Verifica che il bot sia nel server
+        const botGuild = client.guilds.cache.get(guildId);
+        if (!botGuild) {
+            return res.status(404).send('Bot non presente in questo server');
+        }
+
+        // Verifica i permessi
         const result = await db.query(
             'SELECT settings FROM guild_settings WHERE guild_id = $1',
             [guildId]
@@ -1067,7 +1143,6 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             const isAdmin = (userGuild.permissions & 0x8) === 0x8;
             hasAccess = hasAllowedRole || isAdmin;
         } else {
-            // Se non ci sono impostazioni, solo admin può accedere
             hasAccess = (userGuild.permissions & 0x8) === 0x8;
         }
 
@@ -1075,153 +1150,49 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // LEGGI E FILTRA I TRANSCRIPT PER SERVER
+        // RECUPERA I DATI
         const transcriptDir = path.join(__dirname, 'transcripts');
-        let list = '';
+        
+        // Ticket chiusi (transcript)
+        const closedTickets = await db.query(
+            'SELECT * FROM tickets WHERE guild_id = $1 AND status = $2 ORDER BY closed_at DESC LIMIT 50',
+            [guildId, 'closed']
+        );
 
-        // Crea la cartella se non esiste
-        if (!fs.existsSync(transcriptDir)) {
-            fs.mkdirSync(transcriptDir, { recursive: true });
-        }
+        // Ticket aperti
+        const openTickets = await db.query(
+            'SELECT * FROM tickets WHERE guild_id = $1 AND status = $2 ORDER BY created_at DESC',
+            [guildId, 'open']
+        );
 
+        // Transcript disponibili
+        let availableTranscripts = [];
         if (fs.existsSync(transcriptDir)) {
             const allFiles = fs.readdirSync(transcriptDir)
                 .filter(f => f.endsWith('.html') && f !== '.gitkeep');
 
-            console.log(`📁 TUTTI i file transcript trovati:`, allFiles.length);
-
-            // Filtra i file per server ID con debug dettagliato
-            const serverFiles = allFiles.filter(file => {
+            availableTranscripts = allFiles.filter(file => {
                 const serverId = extractServerIdFromFilename(file);
-                const isMatch = serverId === guildId;
-                console.log(`🔍 File: ${file} -> Server ID: ${serverId} -> Match: ${isMatch}`);
-                return isMatch;
-            }).sort((a, b) => fs.statSync(path.join(transcriptDir, b)).mtime - fs.statSync(path.join(transcriptDir, a)).mtime);
-
-            console.log(`🎯 File filtrati per server ${guildId}:`, serverFiles.length);
-
-            if (serverFiles.length > 0) {
-                list = `
-                <div class="transcript-header">
-                    <h2><i class="fas fa-file-alt"></i> Transcript - ${userGuild.name}</h2>
-                    <div class="transcript-stats">
-                        <span class="stat"><i class="fas fa-folder"></i> ${serverFiles.length} transcript trovati</span>
-                        <span class="stat"><i class="fas fa-server"></i> Server ID: ${guildId}</span>
-                        <span class="user-info">
-                            <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
-                                 class="user-avatar" alt="Avatar">
-                            ${req.user.username}
-                        </span>
-                    </div>
-                </div>
-                
-                <div style="background: #2f3136; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #5865F2;">
-                    <p style="margin: 0; font-size: 0.9rem; color: #b9bbbe;">
-                        <strong>💡 Info:</strong> Mostrando solo i transcript del server <strong>${userGuild.name}</strong>.
-                        File totali: ${allFiles.length} | File filtrati: ${serverFiles.length}
-                    </p>
-                </div>
-                
-                <div class="transcript-list">
-                    ${serverFiles.map(file => {
-                        const name = file.replace('.html', '');
-                        const stats = fs.statSync(path.join(transcriptDir, file));
-                        const date = new Date(stats.mtime).toLocaleString('it-IT');
-                        const size = (stats.size / 1024).toFixed(2);
-                        const serverId = extractServerIdFromFilename(file);
-                        
-                        return `
-                        <div class="transcript-item">
-                            <div class="transcript-info">
-                                <div class="transcript-name">
-                                    <i class="fas fa-ticket-alt"></i>
-                                    <a href="/transcript/${name}" target="_blank">${name}</a>
-                                </div>
-                                <div class="transcript-meta">
-                                    <span><i class="far fa-clock"></i> ${date}</span>
-                                    <span><i class="fas fa-weight-hanging"></i> ${size} KB</span>
-                                    <span><i class="fas fa-server"></i> ${serverId || 'N/A'}</span>
-                                </div>
-                            </div>
-                            <div class="transcript-actions">
-                                <a href="/transcript/${name}" target="_blank" class="btn-view">
-                                    <i class="fas fa-eye"></i> Visualizza
-                                </a>
-                                <button onclick="copyTranscriptLink('${name}')" class="btn-copy" title="Copia link">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                                <button onclick="deleteTranscript('${name}', event)" class="btn-delete" title="Elimina transcript">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>`;
-                    }).join('')}
-                </div>
-            `;
-            } else {
-                list = `
-                <div class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <h3>Nessun transcript trovato per questo server</h3>
-                    <p>Non ci sono transcript archiviati per <strong>${userGuild.name}</strong>.</p>
-                    
-                    <div style="margin-top: 20px; padding: 20px; background: var(--border); border-radius: 8px; text-align: left;">
-                        <h4>🔧 Debug Informazioni</h4>
-                        <p><strong>Server ID cercato:</strong> ${guildId}</p>
-                        <p><strong>File totali nella cartella:</strong> ${allFiles.length}</p>
-                        <p><strong>File filtrati per questo server:</strong> ${serverFiles.length}</p>
-                        
-                        ${allFiles.length > 0 ? `
-                            <div style="margin-top: 15px;">
-                                <h5>📁 Analisi file disponibili:</h5>
-                                <div style="background: #2f3136; padding: 15px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
-                                    ${allFiles.slice(0, 10).map(file => {
-                                        const serverId = extractServerIdFromFilename(file);
-                                        return `
-                                        <div style="padding: 8px; border-bottom: 1px solid #40444b;">
-                                            <strong>${file}</strong><br>
-                                            <small style="color: #b9bbbe;">
-                                                Server ID estratto: ${serverId || 'NON TROVATO'} | 
-                                                Match: ${serverId === guildId ? '✅' : '❌'} |
-                                                <a href="/transcript/${file.replace('.html', '')}" target="_blank" style="color: #5865F2;">Prova ad aprire</a>
-                                            </small>
-                                        </div>`;
-                                    }).join('')}
-                                    ${allFiles.length > 10 ? `<div style="padding: 8px; color: #b9bbbe;">... e altri ${allFiles.length - 10} file</div>` : ''}
-                                </div>
-                            </div>
-                        ` : ''}
-                        
-                        <div style="margin-top: 20px; padding: 15px; background: #2f3136; border-radius: 5px;">
-                            <h5>💡 Perché non vengono mostrati i file?</h5>
-                            <p>I file transcript devono avere l'ID del server nel nome per essere filtrati correttamente.</p>
-                            <p><strong>Formato consigliato:</strong> <code>ticket-support-username-123456789-${guildId}.html</code></p>
-                            <p>Verifica che il sistema di creazione transcript includa l'ID del server nel nome file.</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-            }
-        } else {
-            list = `
-                <div class="empty-state">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Cartella transcript non trovata</h3>
-                    <p>La cartella dei transcript non esiste sul server.</p>
-                    <p style="margin-top: 10px; font-size: 0.9rem; color: var(--text-secondary);">
-                        Path: ${transcriptDir}
-                    </p>
-                </div>
-            `;
+                return serverId === guildId;
+            }).map(file => {
+                const stats = fs.statSync(path.join(transcriptDir, file));
+                return {
+                    name: file.replace('.html', ''),
+                    file: file,
+                    date: new Date(stats.mtime).toLocaleString('it-IT'),
+                    size: (stats.size / 1024).toFixed(2)
+                };
+            }).sort((a, b) => new Date(b.date) - new Date(a.date));
         }
 
-        // HTML finale - VERSIONE SICURA
-        const html = `<!DOCTYPE html>
+        // HTML per la pagina
+        const html = `
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript - ${userGuild.name}</title>
+    <title>Gestione Ticket - ${botGuild.name}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
@@ -1235,6 +1206,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             --primary: #5865F2;
             --primary-dark: #4752c4;
             --success: #00ff88;
+            --warning: #faa81a;
             --error: #ed4245;
             --background: #0f0f12;
             --card-bg: #1a1a1d;
@@ -1252,7 +1224,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -1269,7 +1241,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
             padding: 20px;
             background: var(--card-bg);
             border-radius: 12px;
@@ -1277,8 +1249,8 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         }
 
         .server-icon {
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             border-radius: 12px;
         }
 
@@ -1308,48 +1280,57 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             border-radius: 50%;
         }
 
-        .transcript-header {
-            background: var(--card-bg);
-            padding: 25px;
-            border-radius: 15px;
-            margin-bottom: 25px;
-            border: 1px solid var(--border);
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
         }
 
-        .transcript-header h2 {
-            color: var(--text-primary);
-            margin-bottom: 15px;
+        .stat-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-open { color: var(--warning); }
+        .stat-closed { color: var(--success); }
+        .stat-transcripts { color: var(--primary); }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .transcript-stats {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .stat {
-            background: var(--primary);
-            color: white;
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .transcript-list {
+        .ticket-list, .transcript-list {
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
 
-        .transcript-item {
+        .ticket-item, .transcript-item {
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -1360,17 +1341,17 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             transition: all 0.3s ease;
         }
 
-        .transcript-item:hover {
+        .ticket-item:hover, .transcript-item:hover {
             border-color: var(--primary);
             transform: translateY(-2px);
             box-shadow: 0 5px 20px rgba(0,0,0,0.3);
         }
 
-        .transcript-info {
+        .ticket-info, .transcript-info {
             flex: 1;
         }
 
-        .transcript-name {
+        .ticket-name, .transcript-name {
             font-weight: 600;
             margin-bottom: 8px;
             display: flex;
@@ -1378,58 +1359,76 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             gap: 10px;
         }
 
-        .transcript-name a {
+        .ticket-name a, .transcript-name a {
             color: var(--text-primary);
             text-decoration: none;
         }
 
-        .transcript-name a:hover {
+        .ticket-name a:hover, .transcript-name a:hover {
             color: var(--primary);
         }
 
-        .transcript-meta {
+        .ticket-meta, .transcript-meta {
             display: flex;
             gap: 20px;
             font-size: 0.85rem;
             color: var(--text-secondary);
         }
 
-        .transcript-meta span {
+        .ticket-meta span, .transcript-meta span {
             display: flex;
             align-items: center;
             gap: 5px;
         }
 
-        .transcript-actions {
+        .ticket-actions, .transcript-actions {
             display: flex;
             gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 15px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
         }
 
         .btn-view {
             background: var(--primary);
             color: white;
-            padding: 8px 15px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 0.85rem;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: background 0.3s ease;
         }
 
         .btn-view:hover {
             background: var(--primary-dark);
         }
 
+        .btn-respond {
+            background: var(--success);
+            color: #000;
+        }
+
+        .btn-respond:hover {
+            background: #00cc6a;
+        }
+
+        .btn-close {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-close:hover {
+            background: #d83639;
+        }
+
         .btn-copy {
             background: var(--border);
             color: var(--text-primary);
-            border: none;
-            padding: 8px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.3s ease;
         }
 
         .btn-copy:hover {
@@ -1451,42 +1450,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             background: var(--primary);
         }
 
-        .btn-logout {
-            background: var(--error);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-delete {
-            background: var(--error);
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.85rem;
-        }
-        
-        .btn-delete:hover {
-            background: #d83639;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(237, 66, 69, 0.3);
-        }
-
-        .btn-logout:hover {
-            background: #d83639;
-        }
-
-        .empty-state, .error-state {
+        .empty-state {
             text-align: center;
             padding: 60px 20px;
             color: var(--text-secondary);
@@ -1498,23 +1462,28 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             color: var(--border);
         }
 
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-open { background: var(--warning); color: #000; }
+        .status-closed { background: var(--success); color: #000; }
+
         @media (max-width: 768px) {
-            .transcript-item {
+            .ticket-item, .transcript-item {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 15px;
             }
             
-            .transcript-actions {
+            .ticket-actions, .transcript-actions {
                 align-self: flex-end;
             }
             
-            .transcript-stats {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .transcript-meta {
+            .ticket-meta, .transcript-meta {
                 flex-direction: column;
                 gap: 5px;
             }
@@ -1524,29 +1493,133 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 <body>
     <div class="container">
         <div class="header">
-            <h1><i class="fas fa-shield-alt"></i> Staff Area - Transcript</h1>
-            <div class="user-actions">
-                <div class="user-info">
-                    <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
-                         class="user-avatar" alt="Avatar">
-                    <span>${req.user.username}</span>
-                </div>
-                <a href="/logout" class="btn-logout">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
+            <h1><i class="fas fa-shield-alt"></i> Staff Area - Gestione Ticket</h1>
+            <div class="user-info">
+                <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                     class="user-avatar" alt="Avatar">
+                <span>${req.user.username}</span>
             </div>
         </div>
 
         <div class="server-header">
-            ${userGuild.icon ? `<img src="https://cdn.discordapp.com/icons/${userGuild.id}/${userGuild.icon}.png" class="server-icon" alt="${userGuild.name}">` : '<div class="server-icon" style="background: var(--primary); display: flex; align-items: center; justify-content: center; color: white;"><i class="fas fa-server"></i></div>'}
+            ${botGuild.icon ? `<img src="https://cdn.discordapp.com/icons/${botGuild.id}/${botGuild.icon}.png" class="server-icon" alt="${botGuild.name}">` : '<div class="server-icon" style="background: var(--primary); display: flex; align-items: center; justify-content: center; color: white;"><i class="fas fa-server"></i></div>'}
             <div class="server-info">
-                <h2>${userGuild.name}</h2>
-                <p>ID: ${userGuild.id} ${guildId === '1431629401384026234' ? '<span style="color: var(--success); margin-left: 10px;">(Server Principale)</span>' : ''}</p>
+                <h2>${botGuild.name}</h2>
+                <p>ID: ${botGuild.id} • Membri: ${botGuild.memberCount || 'N/A'}</p>
             </div>
         </div>
-        
-        ${list}
-        
+
+        <!-- STATISTICHE -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number stat-open">${openTickets.rows.length}</div>
+                <div>Ticket Aperti</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number stat-closed">${closedTickets.rows.length}</div>
+                <div>Ticket Chiusi</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number stat-transcripts">${availableTranscripts.length}</div>
+                <div>Transcript Disponibili</div>
+            </div>
+        </div>
+
+        <!-- TICKET APERTI -->
+        <div class="section">
+            <div class="section-header">
+                <h3 class="section-title">
+                    <i class="fas fa-ticket-alt"></i>
+                    Ticket Aperti (Online)
+                </h3>
+            </div>
+
+            ${openTickets.rows.length > 0 ? `
+                <div class="ticket-list">
+                    ${openTickets.rows.map(ticket => {
+                        const channel = botGuild.channels.cache.get(ticket.channel_id);
+                        const user = client.users.cache.get(ticket.user_id);
+                        return `
+                        <div class="ticket-item">
+                            <div class="ticket-info">
+                                <div class="ticket-name">
+                                    <span class="status-badge status-open">APERTO</span>
+                                    ${ticket.ticket_type} - ${user ? user.username : 'Utente Sconosciuto'}
+                                </div>
+                                <div class="ticket-meta">
+                                    <span><i class="far fa-clock"></i> ${new Date(ticket.created_at).toLocaleString('it-IT')}</span>
+                                    <span><i class="fas fa-hashtag"></i> ${channel ? channel.name : 'Canale eliminato'}</span>
+                                    <span><i class="fas fa-user"></i> ${user ? user.username : 'Utente Sconosciuto'}</span>
+                                </div>
+                            </div>
+                            <div class="ticket-actions">
+                                <button onclick="openTicketChat('${ticket.id}', '${ticket.channel_id}')" class="btn btn-respond">
+                                    <i class="fas fa-comment"></i> Rispondi
+                                </button>
+                                ${channel ? `
+                                <a href="https://discord.com/channels/${guildId}/${ticket.channel_id}" target="_blank" class="btn btn-view">
+                                    <i class="fas fa-external-link-alt"></i> Apri in Discord
+                                </a>
+                                ` : ''}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            ` : `
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>Nessun ticket aperto</h3>
+                    <p>Non ci sono ticket aperti in questo momento.</p>
+                </div>
+            `}
+        </div>
+
+        <!-- TRANSCRIPT (TICKET CHIUSI) -->
+        <div class="section">
+            <div class="section-header">
+                <h3 class="section-title">
+                    <i class="fas fa-file-alt"></i>
+                    Transcript (Ticket Chiusi)
+                </h3>
+            </div>
+
+            ${availableTranscripts.length > 0 ? `
+                <div class="transcript-list">
+                    ${availableTranscripts.map(transcript => `
+                        <div class="transcript-item">
+                            <div class="transcript-info">
+                                <div class="transcript-name">
+                                    <i class="fas fa-ticket-alt"></i>
+                                    <a href="/transcript/${transcript.name}" target="_blank">${transcript.name}</a>
+                                </div>
+                                <div class="transcript-meta">
+                                    <span><i class="far fa-clock"></i> ${transcript.date}</span>
+                                    <span><i class="fas fa-weight-hanging"></i> ${transcript.size} KB</span>
+                                </div>
+                            </div>
+                            <div class="transcript-actions">
+                                <a href="/transcript/${transcript.name}" target="_blank" class="btn btn-view">
+                                    <i class="fas fa-eye"></i> Visualizza
+                                </a>
+                                <button onclick="copyTranscriptLink('${transcript.name}')" class="btn btn-copy" title="Copia link">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button onclick="deleteTranscript('${transcript.name}', event)" class="btn btn-close" title="Elimina transcript">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : `
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>Nessun transcript disponibile</h3>
+                    <p>Non ci sono transcript archiviati per questo server.</p>
+                </div>
+            `}
+        </div>
+
         <div style="text-align: center; margin-top: 40px; display: flex; gap: 15px; justify-content: center;">
             <a href="/transcripts" class="btn-back">
                 <i class="fas fa-arrow-left"></i> Cambia Server
@@ -1557,7 +1630,72 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         </div>
     </div>
 
+    <!-- MODAL PER RISPOSTA TICKET -->
+    <div id="ticketModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--card-bg); padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; border: 1px solid var(--border);">
+            <h3 style="margin-bottom: 20px;"><i class="fas fa-comment"></i> Rispondi al Ticket</h3>
+            <textarea id="ticketMessage" placeholder="Scrivi il tuo messaggio..." style="width: 100%; height: 150px; background: var(--border); border: 1px solid var(--border); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; resize: vertical;"></textarea>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="closeModal()" class="btn btn-copy">Annulla</button>
+                <button onclick="sendTicketMessage()" class="btn btn-respond">Invia Messaggio</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let currentTicketId = null;
+        let currentChannelId = null;
+
+        function openTicketChat(ticketId, channelId) {
+            currentTicketId = ticketId;
+            currentChannelId = channelId;
+            document.getElementById('ticketModal').style.display = 'flex';
+            document.getElementById('ticketMessage').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('ticketModal').style.display = 'none';
+            currentTicketId = null;
+            currentChannelId = null;
+            document.getElementById('ticketMessage').value = '';
+        }
+
+        async function sendTicketMessage() {
+            const message = document.getElementById('ticketMessage').value.trim();
+            if (!message) {
+                alert('Inserisci un messaggio!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/ticket/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ticketId: currentTicketId,
+                        channelId: currentChannelId,
+                        message: message
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Messaggio inviato con successo!');
+                    closeModal();
+                    // Ricarica la pagina per aggiornare lo stato
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    alert('Errore: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Errore:', error);
+                alert('Errore di connessione');
+            }
+        }
+
         function copyTranscriptLink(transcriptId) {
             const link = window.location.origin + '/transcript/' + transcriptId;
             navigator.clipboard.writeText(link).then(() => {
@@ -1589,70 +1727,28 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 const result = await response.json();
 
                 if (result.success) {
-                    showNotification('✅ Transcript eliminato con successo!', 'success');
-                    
+                    alert('Transcript eliminato con successo!');
                     const transcriptItem = event.target.closest('.transcript-item');
                     if (transcriptItem) {
                         transcriptItem.style.opacity = '0';
                         transcriptItem.style.transform = 'translateX(-100px)';
                         setTimeout(() => {
                             transcriptItem.remove();
-                            updateTranscriptCount();
                         }, 300);
                     }
                 } else {
-                    showNotification('❌ Errore: ' + result.message, 'error');
+                    alert('Errore: ' + result.message);
                 }
             } catch (error) {
                 console.error('Errore eliminazione:', error);
-                showNotification('❌ Errore di connessione', 'error');
+                alert('Errore di connessione');
             }
         }
 
-        function showNotification(message, type = 'info') {
-            const notification = document.createElement('div');
-            notification.style.cssText = \`
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 15px 20px;
-                border-radius: 8px;
-                color: white;
-                z-index: 10000;
-                font-weight: 600;
-                font-family: 'Inter', sans-serif;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                transition: all 0.3s ease;
-                \${type === 'success' ? 'background: #00ff88; color: #000;' : ''}
-                \${type === 'error' ? 'background: #ed4245;' : ''}
-                \${type === 'info' ? 'background: #5865F2;' : ''}
-            \`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.transform = 'translateX(0)';
-            }, 10);
-            
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                notification.style.transform = 'translateX(100px)';
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.parentNode.removeChild(notification);
-                    }
-                }, 300);
-            }, 5000);
-        }
-        
-        function updateTranscriptCount() {
-            const items = document.querySelectorAll('.transcript-item');
-            const countElement = document.querySelector('.transcript-stats .stat:first-child');
-            if (countElement) {
-                const newCount = items.length;
-                countElement.innerHTML = '<i class="fas fa-folder"></i> ' + newCount + ' transcript trovati';
-            }
-        }
+        // Chiudi modal con ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
     </script>
 </body>
 </html>`;
@@ -1660,7 +1756,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
         res.send(html);
 
     } catch (error) {
-        console.error('❌ Errore nel caricamento transcript server:', error);
+        console.error('❌ Errore nel caricamento gestione ticket:', error);
         res.status(500).send('Errore interno del server');
     }
 });
