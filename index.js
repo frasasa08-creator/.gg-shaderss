@@ -296,7 +296,7 @@ app.use((err, req, res, next) => {
 app.get('/auth/failure', (req, res) => {
     console.log('❌ Autenticazione fallita:', error);
     const error = req.session.messages?.[0] || 'Errore di autenticazione';
-    const error = req.query.error || 'Errore sconosciuto';
+    const authError = req.query.error || 'Errore sconosciuto';
     const errorDescription = req.query.error_description || 'Nessuna descrizione';
     
     res.send(`
@@ -317,7 +317,7 @@ app.get('/auth/failure', (req, res) => {
             
             <div class="error-details">
                 <strong>Dettagli errore:</strong><br>
-                Codice: ${error}<br>
+                Codice: ${authError}<br>
                 Descrizione: ${errorDescription}
             </div>
             
