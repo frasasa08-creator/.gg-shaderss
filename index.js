@@ -31,14 +31,6 @@ const client = new Client({
     ],
 });
 
-// Debug iniziale
-console.log('🔧 Avvio applicazione...');
-console.log('📋 Variabili ambiente:', {
-    NODE_ENV: process.env.NODE_ENV,
-    HAS_DISCORD_TOKEN: !!process.env.DISCORD_TOKEN,
-    HAS_DB_HOST: !!process.env.DB_HOST
-});
-
 // Avvia pulizia automatica all'avvio e ogni 24 ore
 async function startAutoCleanup() {
     try {
@@ -85,23 +77,11 @@ function extractServerIdFromFilename(filename) {
     console.log(`❌ Nessun Server ID trovato in: ${filename}`);
     return null;
 }
+
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
-// Usa la porta di Render invece di 10000
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server avviato sulla porta ${PORT}`);
-    console.log(`🌐 URL: http://0.0.0.0:${PORT}`);
-    console.log(`🫀 Health check: http://0.0.0.0:${PORT}/health`);
-});
-
-
-// Chiudi gracefully
-process.on('SIGTERM', () => {
-    console.log('🔄 Ricevuto SIGTERM, shutdown...');
-    process.exit(0);
-});
+const PORT = process.env.PORT || 3000;
 
 // === MIDDLEWARE IN ORDINE CORRETTO ===
 app.use(express.json());
@@ -231,24 +211,24 @@ app.get('/auth/discord', (req, res, next) => {
 app.get('/auth/discord/callback',
     (req, res, next) => {
         console.log('🔄 Callback OAuth ricevuto');
-        console.log('📊 Query params:', req.query);
         console.log('📊 Session ID:', req.sessionID);
+        console.log('👤 Utente prima auth:', req.user?.username || 'Nessuno');
         
         passport.authenticate('discord', { 
             failureRedirect: '/auth/failure',
             failureMessage: true
-        })(req, res, (err) => {
-            if (err) {
-                console.error('❌ Errore durante autenticazione:', err);
-                console.error('❌ Dettaglio errore OAuth:', err.oauthError);
-                return res.redirect('/auth/failure');
-            }
-            next();
-        });
+        })(req, res, next);
     },
     (req, res) => {
         console.log('✅ Autenticazione completata per:', req.user.username);
-        res.redirect(req.session.returnTo || '/');
+        console.log('📋 Session dopo auth:', req.sessionID);
+        console.log('👤 User dopo auth:', req.user.username);
+        
+        const returnTo = req.session.returnTo || '/';
+        delete req.session.returnTo;
+        
+        console.log('🔀 Redirect a:', returnTo);
+        res.redirect(returnTo);
     }
 );
 
@@ -293,28 +273,34 @@ app.use((err, req, res, next) => {
 });
 
 app.get('/auth/failure', (req, res) => {
-    // ✅ CORRETTO - usa un nome diverso per la variabile
-    const authError = req.session.messages?.[0] || 'Errore di autenticazione';
-    console.log('❌ Autenticazione fallita:', authError);
+    console.log('❌ Autenticazione fallita');
+    const error = req.query.error || 'Errore sconosciuto';
+    const errorDescription = req.query.error_description || 'Nessuna descrizione';
     
     res.send(`
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Errore di Autenticazione</title>
+            <title>Autenticazione Fallita</title>
             <style>
-                body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
-                h1 { color: #ff6b6b; }
-                .error { background: #ffe6e6; padding: 20px; border-radius: 8px; margin: 20px 0; }
+                body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
+                       border-radius: 8px; text-decoration: none; margin: 10px; }
+                .error-details { background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
             </style>
         </head>
         <body>
-            <h1>❌ Errore di Autenticazione</h1>
-            <div class="error">
-                <p><strong>${authError}</strong></p>
-                <p>Se l'errore persiste, riprova tra 15-30 minuti.</p>
+            <h1>❌ Autenticazione Fallita</h1>
+            <p>Impossibile accedere con Discord.</p>
+            
+            <div class="error-details">
+                <strong>Dettagli errore:</strong><br>
+                Codice: ${error}<br>
+                Descrizione: ${errorDescription}
             </div>
-            <a href="/">Torna alla Home</a>
+            
+            <a href="/auth/discord" class="btn">Riprova Login</a>
+            <a href="/" class="btn">Torna alla Home</a>
         </body>
         </html>
     `);
@@ -337,13 +323,19 @@ app.get('/logout', (req, res) => {
 
 // === ROTTE PUBBLICHE ===
 app.get('/health', (req, res) => {
-    // ✅ SEMPRE 200 OK - il sito web funziona anche se il bot è in avvio
-    res.status(200).json({
-        status: 'ok',
-        bot: client && client.isReady() ? 'online' : 'starting',
-        timestamp: new Date().toISOString(),
-        service: 'GG-Shaderss Web Service'
-    });
+    if (client && client.isReady()) {
+        res.status(200).json({
+            status: 'ok',
+            bot: 'online',
+            timestamp: new Date().toISOString()
+        });
+    } else {
+        res.status(503).json({
+            status: 'error',
+            bot: 'offline',
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 app.get('/api/status', (req, res) => {
@@ -664,24 +656,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
-let retryCount = 0;
-const maxRetries = 3;
 
-async function loginWithRetry() {
-    try {
-        await authenticateWithDiscord();
-        retryCount = 0;
-    } catch (error) {
-        if (error.oauthError?.statusCode === 429 && retryCount < maxRetries) {
-            retryCount++;
-            const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
-            console.log(`⏳ Rate limit, riprovo tra ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return loginWithRetry();
-        }
-        throw error;
-    }
-}
 
 // Nuova route per la chat live
 /*app.get('/chat/:ticketId', async (req, res) => {
@@ -1547,7 +1522,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(404).send('Bot non presente in questo server');
         }
 
-        // VERIFICA I PERMESSI - CORREGGI QUESTA PARTE
+        // Verifica i permessi
         const result = await db.query(
             'SELECT settings FROM guild_settings WHERE guild_id = $1',
             [guildId]
@@ -1569,16 +1544,16 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // RECUPERA I DATI - CORREGGI LE QUERY
+        // RECUPERA I DATI
         const transcriptDir = path.join(__dirname, 'transcripts');
         
-        // Ticket chiusi (transcript) - CORREGGI QUESTA QUERY
+        // Ticket chiusi (transcript)
         const closedTickets = await db.query(
             'SELECT * FROM tickets WHERE guild_id = $1 AND status = $2 ORDER BY closed_at DESC LIMIT 50',
             [guildId, 'closed']
         );
 
-        // Ticket aperti - CORREGGI QUESTA QUERY
+        // Ticket aperti
         const openTickets = await db.query(
             'SELECT * FROM tickets WHERE guild_id = $1 AND status = $2 ORDER BY created_at DESC',
             [guildId, 'open']
@@ -1603,41 +1578,6 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 };
             }).sort((a, b) => new Date(b.date) - new Date(a.date));
         }
-              // DEBUG - VERIFICA I DATI
-        console.log('📊 DEBUG DATI TRANSCRIPT:');
-        console.log('- Guild ID:', guildId);
-        console.log('- Ticket aperti:', openTickets.rows.length);
-        console.log('- Ticket chiusi:', closedTickets.rows.length);
-        console.log('- Transcript files:', availableTranscripts.length);
-        console.log('- Transcript files trovati:', availableTranscripts.map(t => t.name));
-
-        // Se non ci sono dati, mostra un messaggio
-        if (openTickets.rows.length === 0 && closedTickets.rows.length === 0 && availableTranscripts.length === 0) {
-            return res.send(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Nessun Ticket - ${botGuild.name}</title>
-                    <style>
-                        body { background: #1e1f23; color: white; font-family: sans-serif; padding: 50px; text-align: center; }
-                        .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin: 10px; }
-                    </style>
-                </head>
-                <body>
-                    <h1>📭 Nessun Ticket Trovato</h1>
-                    <p>Non ci sono ticket aperti, chiusi o transcript per il server <strong>${botGuild.name}</strong>.</p>
-                    <p>I ticket appariranno qui quando verranno creati e chiusi nel server Discord.</p>
-                    <div>
-                        <a href="/transcripts" class="btn">← Torna alla selezione server</a>
-                        <a href="/" class="btn">🏠 Home</a>
-                    </div>
-                </body>
-                </html>
-            `);
-        }
-
-        // HTML per la pagina...
-
 
         // HTML per la pagina
         const html = `
@@ -3047,15 +2987,10 @@ process.on('unhandledRejection', async (error) => {
 // Export client e db
 module.exports = { client, db };
 
-// LOGIN BOT
-console.log('🔐 Tentativo di login bot...');
-client.login(process.env.DISCORD_TOKEN)
-    .then(() => {
-        console.log('✅ Login bot avviato con successo');
-    })
-    .catch(error => {
-        console.error('❌ ERRORE LOGIN BOT:', error);
-        process.exit(1);
-    });
+// Login bot
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+    console.error('❌ Errore login bot:', error);
+    process.exit(1);
+});
 
 console.log('File index.js caricato completamente');
