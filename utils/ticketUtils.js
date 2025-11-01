@@ -247,7 +247,7 @@ async function closeTicketWithReason(interaction) {
         // === SALVA TRANSCRIPT CON NOME CANALE E SERVER ID ===
         const transcriptDir = path.join(__dirname, '..', 'transcripts');
         console.log(`📁 Percorso cartella transcripts: ${transcriptDir}`);
-        
+
         // Crea la cartella se non esiste
         if (!fs.existsSync(transcriptDir)) {
             console.log('📁 Creazione cartella transcripts...');
@@ -260,7 +260,7 @@ async function closeTicketWithReason(interaction) {
         } else {
             console.log('✅ Cartella transcripts già esistente');
         }
-        
+
         // Verifica permessi scrittura
         try {
             fs.accessSync(transcriptDir, fs.constants.W_OK);
@@ -268,24 +268,23 @@ async function closeTicketWithReason(interaction) {
         } catch (error) {
             console.error('❌ Nessun permesso scrittura sulla cartella:', error);
         }
-        
-        
+
         // Recupera il tipo di ticket e l'utente creatore dal database
         const ticketType = ticket.ticket_type.toLowerCase().replace(/\s+/g, '-');
-        
-        //Recupera l'utente che ha CREATO il ticket, non quello che lo chiude
-        let ticketCreator = null;
+
+        // ✅ CORRETTO: Recupera l'utente che ha CREATO il ticket
+        let ticketCreatorUser = null;
         try {
-            ticketCreator = await interaction.client.users.fetch(ticket.user_id);
+            ticketCreatorUser = await interaction.client.users.fetch(ticket.user_id);
         } catch (error) {
             console.log('❌ Impossibile recuperare utente creatore:', ticket.user_id);
-            ticketCreator = { username: 'unknown' };
+            ticketCreatorUser = { username: 'unknown' };
         }
-        
-        const username = ticketCreator.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        const username = ticketCreatorUser.username.toLowerCase().replace(/[^a-z0-9]/g, '');
         const timestamp = Date.now().toString().slice(-8);
         const guildId = interaction.guild.id;
-        
+
         console.log(`📝 Creazione nome file transcript:`);
         console.log(`   - Tipo ticket: ${ticketType}`);
         console.log(`   - Utente: ${username}`);
@@ -302,7 +301,7 @@ async function closeTicketWithReason(interaction) {
         console.log(`   - Percorso: ${transcriptPath}`);
         console.log(`   - Nome file: ${uniqueName}.html`);
         console.log(`   - Dimensione: ${transcript.attachment.length} bytes`);
-        
+
         // Verifica che il file sia stato creato
         if (fs.existsSync(transcriptPath)) {
             const stats = fs.statSync(transcriptPath);
@@ -310,7 +309,7 @@ async function closeTicketWithReason(interaction) {
         } else {
             console.log(`❌ ERRORE: File non creato!`);
         }
-        
+
         const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${uniqueName}`;
 
         // === INVIO DM CON LINK ===
