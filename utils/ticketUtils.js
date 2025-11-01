@@ -12,7 +12,7 @@ const {
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-
+const transcriptDir = path.join(__dirname, '..', 'transcripts');
 // Import del database
 let db;
 try {
