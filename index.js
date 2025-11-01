@@ -646,7 +646,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
 
 
 // Nuova route per la chat live
-app.get('/chat/:ticketId', async (req, res) => {
+/*app.get('/chat/:ticketId', async (req, res) => {
     try {
         const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
         if (!ticket) {
@@ -1012,7 +1012,7 @@ app.get('/transcript/:identifier', (req, res) => {
 </body>
 </html>
     `);
-});
+});*/
 
 // === MIDDLEWARE PER VERIFICA STAFF - INTEGRATO CON ALLOWEDROLES ===
 async function checkStaffRole(req, res, next) {
