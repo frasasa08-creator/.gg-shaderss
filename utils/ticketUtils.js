@@ -187,12 +187,17 @@ async function createTicket(interaction, optionValue) {
                     components: [new ActionRowBuilder().addComponents(newSelectMenu)]
                 });
             }
-        } catch (e) { console.log('Impossibile resettare menu:', e.message); }
+        } catch (e) { 
+            console.log('Impossibile resettare menu:', e.message);
+        }
 
     } catch (error) {
         console.error('Errore creazione ticket:', error);
-        try { await interaction.editReply({ content: `Errore: ${error.message}` }); }
-        catch { console.log('Impossibile rispondere'); }
+        try { 
+            await interaction.editReply({ content: `Errore: ${error.message}` }); 
+        } catch { 
+            console.log('Impossibile rispondere'); 
+        }
     }
 }
 
@@ -216,8 +221,11 @@ async function showCloseTicketModal(interaction) {
         await interaction.showModal(modal);
     } catch (error) {
         console.error('Errore modal:', error);
-        try { await interaction.reply({ content: 'Errore form chiusura.', flags: 64 }); }
-        catch { console.log('Impossibile rispondere'); }
+        try { 
+            await interaction.reply({ content: 'Errore form chiusura.', flags: 64 }); 
+        } catch { 
+            console.log('Impossibile rispondere'); 
+        }
     }
 }
 
@@ -232,8 +240,6 @@ async function closeTicketWithReason(interaction) {
         console.log('   - User:', interaction.user?.username);
         console.log('   - Guild:', interaction.guild?.name);
         
-        await interaction.deferReply({ flags: 64 });
-    try {
         await interaction.deferReply({ flags: 64 });
         const reason = interaction.fields.getTextInputValue('close_reason');
         const channel = interaction.channel;
@@ -269,14 +275,6 @@ async function closeTicketWithReason(interaction) {
             console.log('✅ Cartella transcripts già esistente');
         }
 
-        // Verifica permessi scrittura
-        try {
-            fs.accessSync(transcriptDir, fs.constants.W_OK);
-            console.log('✅ Permessi scrittura OK');
-        } catch (error) {
-            console.error('❌ Nessun permesso scrittura sulla cartella:', error);
-        }
-
         // Recupera il tipo di ticket e l'utente creatore dal database
         const ticketType = ticket.ticket_type.toLowerCase().replace(/\s+/g, '-');
 
@@ -309,7 +307,7 @@ async function closeTicketWithReason(interaction) {
         console.log('   - È Buffer?', Buffer.isBuffer(transcript.attachment));
         console.log('   - È stringa?', typeof transcript.attachment === 'string');
         console.log('   - Lunghezza:', transcript.attachment?.length);
-        
+
         // Converti in Buffer se necessario
         let fileContent;
         if (Buffer.isBuffer(transcript.attachment)) {
@@ -332,7 +330,7 @@ async function closeTicketWithReason(interaction) {
                 </html>
             `, 'utf-8');
         }
-        
+
         // Salva il file
         try {
             fs.writeFileSync(transcriptPath, fileContent);
@@ -349,21 +347,13 @@ async function closeTicketWithReason(interaction) {
             console.log(`❌ Errore salvataggio:`, error.message);
         }
 
-        // Verifica che il file sia stato creato
-        if (fs.existsSync(transcriptPath)) {
-            const stats = fs.statSync(transcriptPath);
-            console.log(`   - Verifica: File esiste, dimensione ${stats.size} bytes`);
-        } else {
-            console.log(`❌ ERRORE: File non creato!`);
-        }
-
         const transcriptUrl = `https://gg-shaderss.onrender.com/transcript/${uniqueName}`;
 
         // === INVIO DM CON LINK ===
         let ticketCreator = null;
         try { 
             ticketCreator = await interaction.client.users.fetch(ticket.user_id); 
-        } catch { 
+        } catch (error) { 
             console.log('Utente non trovato:', ticket.user_id); 
         }
 
@@ -487,7 +477,11 @@ async function closeTicketWithReason(interaction) {
         for (let i = 4; i >= 1; i--) {
             await new Promise(r => setTimeout(r, 1000));
             countdownEmbed.setDescription(`Canale eliminato in **${i}** second${i > 1 ? 'i' : 'o'}...`);
-            try { await msg.edit({ embeds: [countdownEmbed] }); } catch {}
+            try { 
+                await msg.edit({ embeds: [countdownEmbed] }); 
+            } catch (error) {
+                console.log('Errore aggiornamento countdown:', error.message);
+            }
         }
         setTimeout(async () => {
             if (channel.deletable) await channel.delete('Ticket chiuso');
@@ -495,81 +489,11 @@ async function closeTicketWithReason(interaction) {
 
     } catch (error) {
         console.error('Errore chiusura:', error);
-        try { await interaction.editReply({ content: `Errore: ${error.message}` }); }
-        catch { console.log('Impossibile rispondere'); }
-    }
-}
-
-/**
- * GENERA TRANSCRIPT (stile Oblivion Bot)
- */
-async function generateOblivionBotTranscript(channel, ticketId) {
-    try {
-        const guild = channel.guild;
-        const ticketResult = await db.query('SELECT * FROM tickets WHERE id = $1', [ticketId]);
-        if (ticketResult.rows.length === 0) throw new Error('Ticket non trovato');
-
-        const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-<meta charSet="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<link rel="icon" type="image/png" href="${channel.client.user.displayAvatarURL({ extension: 'png', size: 64 })}"/>
-<title>${guild.name} - Ticket #${channel.name}</title>
-<script>
-document.addEventListener("click",t=>{let e=t.target;if(!e)return;e.offsetParent?.classList.contains("context-menu")||contextMenu?.classList.remove("visible");let o=e?.getAttribute("data-goto");if(o){let n=document.getElementById(\`m-\${o}\`);n?(n.scrollIntoView({behavior:"smooth",block:"center"}),n.style.backgroundColor="rgba(148, 156, 247, 0.1)",n.style.transition="background-color 0.5s ease",setTimeout(()=>{n.style.backgroundColor="transparent"},1e3)):console.warn(\`Message \${o} not found.\`)}});
-</script>
-<link rel="stylesheet" href="https://cdn.johnbot.app/css/transcripts.css"/>
-<script src="https://cdn.johnbot.app/js/transcripts.js"></script>
-<script>
-window.$discordMessage = { profiles: { "discord-tickets": { author: "Oblivion Bot", avatar: "${channel.client.user.displayAvatarURL({ extension: 'webp', size: 64 })}", roleColor: "#5865F2", roleName: "BOT", bot: true, verified: true } } };
-</script>
-<script type="module" src="https://cdn.jsdelivr.net/npm/@derockdev/discord-components-core@^3.6.1/dist/derockdev-discord-components-core/derockdev-discord-components-core.esm.js"></script>
-</head>
-<body style="margin:0;min-height:100vh">
-<div>
-<section>
-<span style="font-size:28px;color:#fff;font-weight:600">Welcome to #${channel.name} !</span>
-<span style="font-size:16px;color:#b9bbbe;font-weight:400">This is the start of the #${channel.name} channel.</span>
-</section>
-<header>
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#80848e" viewBox="0 0 24 24">
-<path d="M5.88657 21C5.57547 21 5.3399 20.7189 5.39427 20.4126L6.00001 17H2.59511C2.28449 17 2.04905 16.7198 2.10259 16.4138L2.27759 15.4138C2.31946 15.1746 2.52722 15 2.77011 15H6.35001L7.41001 9H4.00511C3.69449 9 3.45905 8.71977 3.51259 8.41381L3.68759 7.41381C3.72946 7.17456 3.93722 7 4.18011 7H7.76001L8.39677 3.41262C8.43914 3.17391 8.64664 3 8.88907 3H9.87344C10.1845 3 10.4201 3.28107 10.3657 3.58738L9.76001 7H15.76L16.3968 3.41262C16.4391 3.17391 16.6466 3 16.8891 3H17.8734C18.1845 3 18.4201 3.28107 18.3657 3.58738L17.76 7H21.1649C21.4755 7 21.711 7.28023 21.6574 7.58619L21.4824 8.58619C21.4406 8.82544 21.2328 9 20.9899 9H17.41L16.35 15H19.7549C20.0655 15 20.301 15.2802 20.2474 15.5862L20.0724 16.5862C20.0306 16.8254 19.8228 17 19.5799 17H16L15.3632 20.5874C15.3209 20.8261 15.1134 21 14.8709 21H13.8866C13.5755 21 13.3399 20.7189 13.3943 20.4126L14 17H8.00001L7.36325 20.5874C7.32088 20.8261 7.11337 21 6.87094 21H5.88657ZM9.41045 9L8.35045 15H14.3504L15.4104 9H9.41045Z"></path>
-</svg>
-${channel.name}
-</header>
-</div>
-<discord-messages style="min-height:100vh;padding:0 0 90px;background-color:#313338;border:none;border-top:1px solid rgba(255, 255, 255, 0.05)">
-${await generateOblivionBotMessagesHTML(channel)}
-</discord-messages>
-<footer>Generato il <time id="footer-timestamp">${new Date().toLocaleString('it-IT')}</time></footer>
-<div id="context-menu" class="context-menu">
-<div class="item message">Copy Message ID</div>
-<div class="item user">Copy User ID</div>
-</div>
-<script>
-const contextMenu=document.getElementById("context-menu");
-document.addEventListener("contextmenu",e=>{e.preventDefault();let t=e.target;if(!t)return;let s=t.closest("discord-message");if(!s){contextMenu?.classList.remove("visible");return}
-let n=t?.closest(".discord-author-avatar img"),i=n?s?.getAttribute("profile"):s?.getAttribute("id")?.split("-")[1];if(!i){contextMenu?.classList.remove("visible");return}
-if(n?(contextMenu?.querySelector(".item.message")?.classList.add("hidden"),contextMenu?.querySelector(".item.user")?.classList.remove("hidden")):(contextMenu?.querySelector(".item.user")?.classList.add("hidden"),contextMenu?.querySelector(".item.message")?.classList.remove("hidden")),i&&contextMenu){
-contextMenu.classList.add("visible"),contextMenu.style.top=e.pageY+"px",contextMenu.style.left=e.pageX+"px";let c=contextMenu.querySelector(n?".item.user":".item.message");
-c&&c.addEventListener("click",()=>{navigator.clipboard.writeText(i),contextMenu.classList.remove("visible")},{once:!0})}});
-</script>
-</body>
-</html>`;
-
-        console.log('📄 Transcript generato:');
-        console.log('   - Lunghezza HTML:', htmlContent.length);
-        console.log('   - Tipo attachment:', typeof Buffer.from(htmlContent, 'utf-8'));
-        console.log('   - È Buffer?', Buffer.isBuffer(Buffer.from(htmlContent, 'utf-8')));
-        
-        return {
-            attachment: Buffer.from(htmlContent, 'utf-8'),
-            name: `${channel.name}.html`
+        try { 
+            await interaction.editReply({ content: `Errore: ${error.message}` }); 
+        } catch { 
+            console.log('Impossibile rispondere'); 
         }
-    } catch (error) {
-        console.error('Errore generazione transcript:', error);
-        return generateOblivionBotFallbackTranscript(channel, ticketId);
     }
 }
 
@@ -784,6 +708,79 @@ function getOblivionBotButtonType(style) {
         case 'PRIMARY': return 'primary';
         case 'SECONDARY': return 'secondary';
         default: return 'secondary';
+    }
+}
+
+/**
+ * GENERA TRANSCRIPT (stile Oblivion Bot)
+ */
+async function generateOblivionBotTranscript(channel, ticketId) {
+    try {
+        const guild = channel.guild;
+        const ticketResult = await db.query('SELECT * FROM tickets WHERE id = $1', [ticketId]);
+        if (ticketResult.rows.length === 0) throw new Error('Ticket non trovato');
+
+        const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+<meta charSet="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" type="image/png" href="${channel.client.user.displayAvatarURL({ extension: 'png', size: 64 })}"/>
+<title>${guild.name} - Ticket #${channel.name}</title>
+<script>
+document.addEventListener("click",t=>{let e=t.target;if(!e)return;e.offsetParent?.classList.contains("context-menu")||contextMenu?.classList.remove("visible");let o=e?.getAttribute("data-goto");if(o){let n=document.getElementById(\`m-\${o}\`);n?(n.scrollIntoView({behavior:"smooth",block:"center"}),n.style.backgroundColor="rgba(148, 156, 247, 0.1)",n.style.transition="background-color 0.5s ease",setTimeout(()=>{n.style.backgroundColor="transparent"},1e3)):console.warn(\`Message \${o} not found.\`)}});
+</script>
+<link rel="stylesheet" href="https://cdn.johnbot.app/css/transcripts.css"/>
+<script src="https://cdn.johnbot.app/js/transcripts.js"></script>
+<script>
+window.$discordMessage = { profiles: { "discord-tickets": { author: "Oblivion Bot", avatar: "${channel.client.user.displayAvatarURL({ extension: 'webp', size: 64 })}", roleColor: "#5865F2", roleName: "BOT", bot: true, verified: true } } };
+</script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@derockdev/discord-components-core@^3.6.1/dist/derockdev-discord-components-core/derockdev-discord-components-core.esm.js"></script>
+</head>
+<body style="margin:0;min-height:100vh">
+<div>
+<section>
+<span style="font-size:28px;color:#fff;font-weight:600">Welcome to #${channel.name} !</span>
+<span style="font-size:16px;color:#b9bbbe;font-weight:400">This is the start of the #${channel.name} channel.</span>
+</section>
+<header>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#80848e" viewBox="0 0 24 24">
+<path d="M5.88657 21C5.57547 21 5.3399 20.7189 5.39427 20.4126L6.00001 17H2.59511C2.28449 17 2.04905 16.7198 2.10259 16.4138L2.27759 15.4138C2.31946 15.1746 2.52722 15 2.77011 15H6.35001L7.41001 9H4.00511C3.69449 9 3.45905 8.71977 3.51259 8.41381L3.68759 7.41381C3.72946 7.17456 3.93722 7 4.18011 7H7.76001L8.39677 3.41262C8.43914 3.17391 8.64664 3 8.88907 3H9.87344C10.1845 3 10.4201 3.28107 10.3657 3.58738L9.76001 7H15.76L16.3968 3.41262C16.4391 3.17391 16.6466 3 16.8891 3H17.8734C18.1845 3 18.4201 3.28107 18.3657 3.58738L17.76 7H21.1649C21.4755 7 21.711 7.28023 21.6574 7.58619L21.4824 8.58619C21.4406 8.82544 21.2328 9 20.9899 9H17.41L16.35 15H19.7549C20.0655 15 20.301 15.2802 20.2474 15.5862L20.0724 16.5862C20.0306 16.8254 19.8228 17 19.5799 17H16L15.3632 20.5874C15.3209 20.8261 15.1134 21 14.8709 21H13.8866C13.5755 21 13.3399 20.7189 13.3943 20.4126L14 17H8.00001L7.36325 20.5874C7.32088 20.8261 7.11337 21 6.87094 21H5.88657ZM9.41045 9L8.35045 15H14.3504L15.4104 9H9.41045Z"></path>
+</svg>
+${channel.name}
+</header>
+</div>
+<discord-messages style="min-height:100vh;padding:0 0 90px;background-color:#313338;border:none;border-top:1px solid rgba(255, 255, 255, 0.05)">
+${await generateOblivionBotMessagesHTML(channel)}
+</discord-messages>
+<footer>Generato il <time id="footer-timestamp">${new Date().toLocaleString('it-IT')}</time></footer>
+<div id="context-menu" class="context-menu">
+<div class="item message">Copy Message ID</div>
+<div class="item user">Copy User ID</div>
+</div>
+<script>
+const contextMenu=document.getElementById("context-menu");
+document.addEventListener("contextmenu",e=>{e.preventDefault();let t=e.target;if(!t)return;let s=t.closest("discord-message");if(!s){contextMenu?.classList.remove("visible");return}
+let n=t?.closest(".discord-author-avatar img"),i=n?s?.getAttribute("profile"):s?.getAttribute("id")?.split("-")[1];if(!i){contextMenu?.classList.remove("visible");return}
+if(n?(contextMenu?.querySelector(".item.message")?.classList.add("hidden"),contextMenu?.querySelector(".item.user")?.classList.remove("hidden")):(contextMenu?.querySelector(".item.user")?.classList.add("hidden"),contextMenu?.querySelector(".item.message")?.classList.remove("hidden")),i&&contextMenu){
+contextMenu.classList.add("visible"),contextMenu.style.top=e.pageY+"px",contextMenu.style.left=e.pageX+"px";let c=contextMenu.querySelector(n?".item.user":".item.message");
+c&&c.addEventListener("click",()=>{navigator.clipboard.writeText(i),contextMenu.classList.remove("visible")},{once:!0})}});
+</script>
+</body>
+</html>`;
+
+        console.log('📄 Transcript generato:');
+        console.log('   - Lunghezza HTML:', htmlContent.length);
+        console.log('   - Tipo attachment:', typeof Buffer.from(htmlContent, 'utf-8'));
+        console.log('   - È Buffer?', Buffer.isBuffer(Buffer.from(htmlContent, 'utf-8')));
+
+        return {
+            attachment: Buffer.from(htmlContent, 'utf-8'),
+            name: `${channel.name}.html`
+        };
+    } catch (error) {
+        console.error('Errore generazione transcript:', error);
+        return generateOblivionBotFallbackTranscript(channel, ticketId);
     }
 }
 
