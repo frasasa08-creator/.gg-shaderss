@@ -31,6 +31,112 @@ const client = new Client({
     ],
 });
 
+// === ROTTA PER VERIFICARE STRUTTURA DATABASE ===
+app.get('/debug-database', async (req, res) => {
+    try {
+        console.log('🔍 Verifica struttura database...');
+        
+        const tables = ['tickets', 'guild_settings', 'messages'];
+        const results = {};
+        
+        for (const table of tables) {
+            try {
+                // Verifica se la tabella esiste
+                const exists = await db.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = $1
+                    )
+                `, [table]);
+                
+                if (exists.rows[0].exists) {
+                    // Conta le righe
+                    const count = await db.query(`SELECT COUNT(*) as count FROM ${table}`);
+                    // Prendi la struttura
+                    const structure = await db.query(`
+                        SELECT column_name, data_type, is_nullable
+                        FROM information_schema.columns 
+                        WHERE table_name = $1 
+                        ORDER BY ordinal_position
+                    `, [table]);
+                    
+                    // Prendi qualche dato di esempio
+                    const sample = await db.query(`SELECT * FROM ${table} LIMIT 3`);
+                    
+                    results[table] = {
+                        exists: true,
+                        rowCount: parseInt(count.rows[0].count),
+                        structure: structure.rows,
+                        sample: sample.rows
+                    };
+                } else {
+                    results[table] = { exists: false };
+                }
+            } catch (error) {
+                results[table] = { exists: false, error: error.message };
+            }
+        }
+        
+        res.json(results);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// === FUNZIONE PER VERIFICA ACCESSO UTENTE ===
+async function checkUserAccess(user, guildId) {
+    try {
+        console.log('🔍 Verifica accesso per:', user.username, 'nel server:', guildId);
+        
+        // Owner del bot ha sempre accesso
+        if (process.env.BOT_OWNER_ID && user.id === process.env.BOT_OWNER_ID) {
+            console.log('✅ Accesso owner del bot');
+            return true;
+        }
+
+        const userGuilds = user.guilds || [];
+        const userGuild = userGuilds.find(g => g.id === guildId);
+        
+        if (!userGuild) {
+            console.log('❌ Utente non nel server:', guildId);
+            return false;
+        }
+
+        // Controlla impostazioni del server
+        const result = await db.query(
+            'SELECT settings FROM guild_settings WHERE guild_id = $1',
+            [guildId]
+        );
+
+        if (result.rows.length > 0) {
+            const settings = result.rows[0].settings || {};
+            const allowedRoles = settings.allowed_roles || [];
+            const userRoles = userGuild.roles || [];
+            
+            const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
+            const isAdmin = (userGuild.permissions & 0x8) === 0x8;
+            
+            console.log('🔍 Controllo permessi:', {
+                allowedRoles,
+                userRoles,
+                hasAllowedRole,
+                isAdmin
+            });
+            
+            return hasAllowedRole || isAdmin;
+        } else {
+            // Se non ci sono impostazioni, solo admin può accedere
+            const isAdmin = (userGuild.permissions & 0x8) === 0x8;
+            console.log('ℹ️ Nessuna impostazione, solo admin:', isAdmin);
+            return isAdmin;
+        }
+    } catch (error) {
+        console.error('❌ Errore controllo accesso utente:', error);
+        return false;
+    }
+}
+
 // Avvia pulizia automatica all'avvio e ogni 24 ore
 async function startAutoCleanup() {
     try {
@@ -471,7 +577,7 @@ app.get('/transcripts/:ticketId', async (req, res) => {
         }
 
         // Verifica permessi utente
-        const hasAccess = await checkUserAccess(req.user, ticket.guildId);
+        const hasAccess = await checkUserAccess(req.user, ticket.guild_Id);
         if (!hasAccess) {
             return res.status(403).send('Accesso negato');
         }
@@ -634,7 +740,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
 
         const result = await db.query(
           'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1', 
-          [req.params.ticketId]
+          [ticketId]
       );
       const ticket = result.rows[0];
         if (!ticket) {
@@ -642,13 +748,18 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
         }
 
         // Verifica permessi
-        const hasAccess = await checkUserAccess(req.user, ticket.guildId);
+        const hasAccess = await checkUserAccess(req.user, ticket.guildI_d);
         if (!hasAccess) {
             return res.status(403).json({ error: 'Accesso negato' });
         }
 
-        // Ritorna i messaggi dal transcript
-        res.json(ticket.transcript || []);
+        // Ritorna i messaggi dal database
+        const messagesResult = await db.query(
+            'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY timestamp',
+            [ticketId]
+        );
+
+        res.json(messagesResult.rows);
 
     } catch (error) {
         console.error('❌ Errore recupero messaggi:', error);
