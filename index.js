@@ -459,7 +459,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
-/*app.get('/transcripts/:ticketId', async (req, res) => {
+app.get('/transcripts/:ticketId', async (req, res) => {
     try {
         const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
         if (!ticket) {
@@ -624,7 +624,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
 });
 
 // API per ottenere i messaggi di un ticket
-app.get('/api/ticket/:ticketId/messages', async (req, res) => {
+/*app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     try {
         const { ticketId } = req.params;
 
