@@ -289,7 +289,9 @@ async function closeTicketWithReason(interaction) {
 
         const username = ticketCreatorUser.username.toLowerCase().replace(/[^a-z0-9]/g, '');
         const timestamp = Date.now().toString().slice(-8);
-        const guildId = interaction.guild.id;
+        const guildId = ticket.guild_id;  // Questo è l'ID del server originale del ticket
+        console.log(`🎯 Server ID ticket: ${guildId} (originale)`);
+        console.log(`🎯 Server ID bot: ${interaction.guild.id} (attuale)`);
 
         console.log(`📝 Creazione nome file transcript:`);
         console.log(`   - Tipo ticket: ${ticketType}`);
