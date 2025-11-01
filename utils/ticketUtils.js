@@ -229,9 +229,6 @@ async function showCloseTicketModal(interaction) {
     }
 }
 
-/**
- * Chiude ticket con transcript online (nome canale)
- */
 async function closeTicketWithReason(interaction) {
     try {
         console.log('🔴 === DEBUG CHIUSURA TICKET ===');
@@ -241,7 +238,6 @@ async function closeTicketWithReason(interaction) {
         console.log('   - Bot Permissions:', interaction.guild?.members.me?.permissions);
         console.log('   - Channel Name:', interaction.channel?.name);
         console.log('   - Channel Type:', interaction.channel?.type);
-        
         
         await interaction.deferReply({ flags: 64 });
         const reason = interaction.fields.getTextInputValue('close_reason');
@@ -261,16 +257,6 @@ async function closeTicketWithReason(interaction) {
         const transcript = await generateOblivionBotTranscript(channel, ticket.id);
         console.log(`Transcript generato.`);
 
-        
-        // Prova a creare un file di test
-        const testFile = path.join(transcriptDir, `test-${Date.now()}.txt`);
-        try {
-            fs.writeFileSync(testFile, `Test ${new Date().toISOString()}`);
-            console.log('   - Test file created:', fs.existsSync(testFile));
-        } catch (testError) {
-            console.log('   - Test file ERROR:', testError.message);
-        }
-        
         // === SALVA TRANSCRIPT CON NOME CANALE E SERVER ID ===
         const transcriptDir = path.join(__dirname, '..', 'transcripts');
         console.log(`📁 Percorso cartella transcripts: ${transcriptDir}`);
@@ -292,12 +278,20 @@ async function closeTicketWithReason(interaction) {
         console.log('📁 DEBUG SALVATAGGIO:');
         console.log('   - Transcript Dir:', transcriptDir);
         console.log('   - Dir exists:', fs.existsSync(transcriptDir));
-        console.log('   - Dir writable:', true); // Su Render dovrebbe essere sempre scrivibile
+
+        // Prova a creare un file di test
+        const testFile = path.join(transcriptDir, `test-${Date.now()}.txt`);
+        try {
+            fs.writeFileSync(testFile, `Test ${new Date().toISOString()}`);
+            console.log('   - Test file created:', fs.existsSync(testFile));
+        } catch (testError) {
+            console.log('   - Test file ERROR:', testError.message);
+        }
 
         // Recupera il tipo di ticket e l'utente creatore dal database
         const ticketType = ticket.ticket_type.toLowerCase().replace(/\s+/g, '-');
 
-        //Recupera l'utente che ha CREATO il ticket
+        // Recupera l'utente che ha CREATO il ticket
         let ticketCreatorUser = null;
         try {
             ticketCreatorUser = await interaction.client.users.fetch(ticket.user_id);
