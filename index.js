@@ -232,24 +232,24 @@ app.get('/auth/discord', (req, res, next) => {
 app.get('/auth/discord/callback',
     (req, res, next) => {
         console.log('🔄 Callback OAuth ricevuto');
+        console.log('📊 Query params:', req.query);
         console.log('📊 Session ID:', req.sessionID);
-        console.log('👤 Utente prima auth:', req.user?.username || 'Nessuno');
         
         passport.authenticate('discord', { 
             failureRedirect: '/auth/failure',
             failureMessage: true
-        })(req, res, next);
+        })(req, res, (err) => {
+            if (err) {
+                console.error('❌ Errore durante autenticazione:', err);
+                console.error('❌ Dettaglio errore OAuth:', err.oauthError);
+                return res.redirect('/auth/failure');
+            }
+            next();
+        });
     },
     (req, res) => {
         console.log('✅ Autenticazione completata per:', req.user.username);
-        console.log('📋 Session dopo auth:', req.sessionID);
-        console.log('👤 User dopo auth:', req.user.username);
-        
-        const returnTo = req.session.returnTo || '/';
-        delete req.session.returnTo;
-        
-        console.log('🔀 Redirect a:', returnTo);
-        res.redirect(returnTo);
+        res.redirect(req.session.returnTo || '/');
     }
 );
 
@@ -294,7 +294,8 @@ app.use((err, req, res, next) => {
 });
 
 app.get('/auth/failure', (req, res) => {
-    console.log('❌ Autenticazione fallita');
+    console.log('❌ Autenticazione fallita:', error);
+    const error = req.session.messages?.[0] || 'Errore di autenticazione';
     const error = req.query.error || 'Errore sconosciuto';
     const errorDescription = req.query.error_description || 'Nessuna descrizione';
     
