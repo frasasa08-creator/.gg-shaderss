@@ -409,6 +409,78 @@ app.get('/debug-database', async (req, res) => {
     }
 });
 
+// === DEBUG PERMESSI SPECIFICI SERVER ===
+app.get('/debug-server-access/:guildId', checkStaffRole, async (req, res) => {
+    try {
+        const guildId = req.params.guildId;
+        const userGuilds = req.user.guilds || [];
+        
+        const userGuild = userGuilds.find(g => g.id === guildId);
+        if (!userGuild) {
+            return res.json({ error: 'Utente non nel server' });
+        }
+
+        const result = await db.query(
+            'SELECT settings FROM guild_settings WHERE guild_id = $1',
+            [guildId]
+        );
+
+        let analysis = {
+            guildId: guildId,
+            guildName: userGuild.name,
+            userIsAdmin: (userGuild.permissions & 0x8) === 0x8,
+            userRoles: userGuild.roles || [],
+            hasSettings: result.rows.length > 0,
+            allowedRoles: [],
+            hasAccess: false,
+            accessReason: ''
+        };
+
+        if (result.rows.length > 0) {
+            const settings = result.rows[0].settings || {};
+            analysis.allowedRoles = settings.allowed_roles || [];
+            analysis.hasAllowedRole = analysis.userRoles.some(roleId => 
+                analysis.allowedRoles.includes(roleId)
+            );
+            analysis.hasAccess = analysis.hasAllowedRole || analysis.userIsAdmin;
+            analysis.accessReason = analysis.userIsAdmin ? 'admin' : 
+                                  analysis.hasAllowedRole ? 'role' : 'none';
+        } else {
+            analysis.hasAccess = analysis.userIsAdmin;
+            analysis.accessReason = analysis.userIsAdmin ? 'admin' : 'none';
+        }
+
+        res.json(analysis);
+
+    } catch (error) {
+        console.error('❌ Errore debug server access:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// === ROTTA PER VEDERE SERVER DEL BOT ===
+app.get('/debug-bot-guilds', (req, res) => {
+    try {
+        const guilds = Array.from(client.guilds.cache.values()).map(guild => ({
+            id: guild.id,
+            name: guild.name,
+            memberCount: guild.memberCount,
+            icon: guild.icon,
+            joinedAt: guild.joinedAt,
+            ownerId: guild.ownerId,
+            features: guild.features
+        }));
+
+        res.json({
+            total: guilds.length,
+            guilds: guilds
+        });
+    } catch (error) {
+        console.error('❌ Errore debug bot guilds:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // === FUNZIONE PER VERIFICA ACCESSO UTENTE ===
 async function checkUserAccess(user, guildId) {
     try {
@@ -1308,7 +1380,9 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                 continue;
             }
 
-            console.log(`✅ Bot presente in: ${guild.name} (${guild.id})`);
+            console.log(`\n🔍 Analizzo: ${guild.name} (${guild.id})`);
+            console.log(`   👑 È admin: ${(guild.permissions & 0x8) === 0x8}`);
+            console.log(`   👤 Ruoli utente:`, guild.roles || []);
 
             const result = await db.query(
                 'SELECT settings FROM guild_settings WHERE guild_id = $1',
@@ -1322,6 +1396,10 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                 const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
                 const isAdmin = (guild.permissions & 0x8) === 0x8;
 
+                console.log(`   🎯 Ruoli consentiti:`, allowedRoles);
+                console.log(`   ✅ Ha ruolo consentito: ${hasAllowedRole}`);
+                console.log(`   🔓 Accesso consentito: ${hasAllowedRole || isAdmin}`);
+
                 if (hasAllowedRole || isAdmin) {
                     accessibleGuilds.push({
                         id: guild.id,
@@ -1329,13 +1407,13 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
                         botPresent: true,
-                        hasSettings: true
+                        hasSettings: true,
+                        accessType: isAdmin ? 'admin' : 'role'
                     });
-                    console.log(`🎯 Accesso consentito a: ${guild.name}`);
+                    console.log(`   🎉 AGGIUNTO alla lista!`);
                 }
             } else {
-                // 🔥 CORREZIONE: Se non ci sono impostazioni, mostra comunque il server se l'utente è admin
-                console.log(`ℹ️ Nessuna impostazione per: ${guild.name}, controllo solo admin`);
+                console.log(`   ℹ️ Nessuna impostazione trovata`);
                 const isAdmin = (guild.permissions & 0x8) === 0x8;
                 if (isAdmin) {
                     accessibleGuilds.push({
@@ -1344,14 +1422,15 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
                         botPresent: true,
-                        hasSettings: false
+                        hasSettings: false,
+                        accessType: 'admin'
                     });
-                    console.log(`👑 Accesso come admin a: ${guild.name}`);
+                    console.log(`   👑 AGGIUNTO come admin!`);
                 }
             }
         }
 
-        console.log('📋 Server accessibili:', accessibleGuilds.map(g => `${g.name} (${g.id})`));
+        console.log('\n📋 Server accessibili finali:', accessibleGuilds.map(g => `${g.name} (${g.id}) - ${g.accessType}`));
 
         // Se non ci sono server accessibili
         if (accessibleGuilds.length === 0) {
