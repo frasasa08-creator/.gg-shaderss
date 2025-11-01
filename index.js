@@ -1291,17 +1291,24 @@ async function checkStaffRole(req, res, next) {
     }
 }
 
-// === ROTTA PER SELEZIONARE IL SERVER ===
 app.get('/transcripts', checkStaffRole, async (req, res) => {
     try {
         const userGuilds = req.user.guilds || [];
         const accessibleGuilds = [];
 
+        console.log('🤖 Server del bot:', Array.from(client.guilds.cache.keys()));
+        console.log('👤 Server dell\'utente:', userGuilds.map(g => `${g.name} (${g.id})`));
+
         // Trova tutti i server dove l'utente ha accesso + dove il bot è presente
         for (const guild of userGuilds) {
             // Verifica se il bot è in questo server
             const botGuild = client.guilds.cache.get(guild.id);
-            if (!botGuild) continue; // Salta se il bot non è nel server
+            if (!botGuild) {
+                console.log(`❌ Bot non in: ${guild.name} (${guild.id})`);
+                continue;
+            }
+
+            console.log(`✅ Bot presente in: ${guild.name} (${guild.id})`);
 
             const result = await db.query(
                 'SELECT settings FROM guild_settings WHERE guild_id = $1',
@@ -1321,11 +1328,14 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
-                        botPresent: true
+                        botPresent: true,
+                        hasSettings: true
                     });
+                    console.log(`🎯 Accesso consentito a: ${guild.name}`);
                 }
             } else {
-                // Se non ci sono impostazioni, solo admin può accedere
+                // 🔥 CORREZIONE: Se non ci sono impostazioni, mostra comunque il server se l'utente è admin
+                console.log(`ℹ️ Nessuna impostazione per: ${guild.name}, controllo solo admin`);
                 const isAdmin = (guild.permissions & 0x8) === 0x8;
                 if (isAdmin) {
                     accessibleGuilds.push({
@@ -1333,11 +1343,15 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
-                        botPresent: true
+                        botPresent: true,
+                        hasSettings: false
                     });
+                    console.log(`👑 Accesso come admin a: ${guild.name}`);
                 }
             }
         }
+
+        console.log('📋 Server accessibili:', accessibleGuilds.map(g => `${g.name} (${g.id})`));
 
         // Se non ci sono server accessibili
         if (accessibleGuilds.length === 0) {
