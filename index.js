@@ -454,7 +454,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
     }
 });
 
-app.get('/transcripts/:ticketId', async (req, res) => {
+/*app.get('/transcripts/:ticketId', async (req, res) => {
     try {
         const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
         if (!ticket) {
@@ -641,7 +641,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
         console.error('❌ Errore recupero messaggi:', error);
         res.status(500).json({ error: 'Errore interno del server' });
     }
-});
+});*/
 
 
 
