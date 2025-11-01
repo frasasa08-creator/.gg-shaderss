@@ -426,7 +426,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
             'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
             [ticketId, username, message]  // ✅ usa ticketId (stringa) invece di ticket.id (integer)
         );
-        const savedMessage = messageResult.rows[0];
+        const savedMessage = insertResult.rows[0];
 
         // 3. Invia su Discord
         const channel = client.channels.cache.get(targetChannelId);
