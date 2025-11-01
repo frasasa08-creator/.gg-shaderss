@@ -234,11 +234,14 @@ async function showCloseTicketModal(interaction) {
  */
 async function closeTicketWithReason(interaction) {
     try {
-        console.log('=== INIZIO CHIUSURA TICKET ===');
-        console.log('📝 Dati interaction:');
-        console.log('   - Channel:', interaction.channel?.name);
-        console.log('   - User:', interaction.user?.username);
-        console.log('   - Guild:', interaction.guild?.name);
+        console.log('🔴 === DEBUG CHIUSURA TICKET ===');
+        console.log('📋 DATI SERVER:');
+        console.log('   - Server Name:', interaction.guild?.name);
+        console.log('   - Server ID:', interaction.guild?.id);
+        console.log('   - Bot Permissions:', interaction.guild?.members.me?.permissions);
+        console.log('   - Channel Name:', interaction.channel?.name);
+        console.log('   - Channel Type:', interaction.channel?.type);
+        
         
         await interaction.deferReply({ flags: 64 });
         const reason = interaction.fields.getTextInputValue('close_reason');
@@ -257,6 +260,21 @@ async function closeTicketWithReason(interaction) {
         console.log(`Generazione transcript per ticket ${ticket.id}...`);
         const transcript = await generateOblivionBotTranscript(channel, ticket.id);
         console.log(`Transcript generato.`);
+
+        // === DEBUG PRIMA DI SALVARE ===
+        console.log('📁 DEBUG SALVATAGGIO:');
+        console.log('   - Transcript Dir:', transcriptDir);
+        console.log('   - Dir exists:', fs.existsSync(transcriptDir));
+        console.log('   - Dir writable:', true); // Su Render dovrebbe essere sempre scrivibile
+        
+        // Prova a creare un file di test
+        const testFile = path.join(transcriptDir, `test-${Date.now()}.txt`);
+        try {
+            fs.writeFileSync(testFile, `Test ${new Date().toISOString()}`);
+            console.log('   - Test file created:', fs.existsSync(testFile));
+        } catch (testError) {
+            console.log('   - Test file ERROR:', testError.message);
+        }
         
         // === SALVA TRANSCRIPT CON NOME CANALE E SERVER ID ===
         const transcriptDir = path.join(__dirname, '..', 'transcripts');
