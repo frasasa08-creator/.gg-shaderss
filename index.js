@@ -2221,12 +2221,12 @@ app.delete('/transcript/:filename', checkStaffRole, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// CHAT WEB IN TEMPO REALE PER TICKET (stile Discord)
+// CHAT WEB IN TEMPO REALE PER TICKET (COMPLETO E CORRETTO)
 // ═══════════════════════════════════════════════════════════
 
 // WebSocket Server
 const wss = new WebSocketServer({ noServer: true });
-const ticketClients = new Map(); // ticketId → Set<WebSocket>
+const ticketClients = new Map();
 
 // Gestione connessione WebSocket
 wss.on('connection', (ws, req) => {
@@ -2259,7 +2259,7 @@ function broadcastTicketMessage(ticketId, message) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// ROUTE: /ticket/:id → CHAT WEB (CORRETTA)
+// ROUTE: /ticket/:id → CHAT WEB
 // ═══════════════════════════════════════════════════════════
 
 app.get('/ticket/:id', async (req, res) => {
@@ -2292,7 +2292,7 @@ app.get('/ticket/:id', async (req, res) => {
             return res.status(403).send('<h1>Accesso negato</h1>');
         }
 
-        // === HTML CORRETTO CON BACKTICK SICURI ===
+        // HTML sicuro
         const html = `
 <!DOCTYPE html>
 <html lang="it">
@@ -2337,7 +2337,6 @@ app.get('/ticket/:id', async (req, res) => {
         const input = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
 
-        // Carica messaggi passati
         fetch('/ticket/${ticketId}/messages')
             .then(r => r.json())
             .then(msgs => msgs.forEach(addMessage));
@@ -2420,7 +2419,7 @@ app.post('/ticket/:id/send', async (req, res) => {
     try {
         const { message } = req.body;
         const ticketId = req.params.id;
-        if (!req.session.user || !message?.trim()) return res.status(400).json({ error: 'Bad request' });
+        if (!req.session.user || !message.trim()) return res.status(400).json({ error: 'Bad request' });
 
         const ticketRes = await db.query(
             'SELECT channel_id FROM tickets WHERE id = $1',
@@ -2454,6 +2453,20 @@ app.post('/ticket/:id/send', async (req, res) => {
         console.error('Errore invio messaggio web:', error);
         res.status(500).json({ error: 'Errore invio' });
     }
+});
+
+// ═══════════════════════════════════════════════════════════
+// AVVIO SERVER + WEBSOCKET
+// ═══════════════════════════════════════════════════════════
+
+const server = app.listen(PORT, () => {
+    console.log("Server web su http://localhost:" + PORT);
+});
+
+server.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+    });
 });
 
 // === ROTTA DEBUG PER VERIFICARE I FILE ===
