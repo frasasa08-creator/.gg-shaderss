@@ -402,6 +402,58 @@ app.get('/api/status', (req, res) => {
     }
 });
 
+// === DEBUG STRUTTURA CARTELLE ===
+app.get('/debug-folder-structure', (req, res) => {
+    const projectRoot = __dirname;
+    const transcriptsDir = path.join(__dirname, 'transcripts');
+    
+    try {
+        // Crea la cartella se non esiste
+        if (!fs.existsSync(transcriptsDir)) {
+            fs.mkdirSync(transcriptsDir, { recursive: true });
+        }
+        
+        // Prova a creare un file di test
+        const testFilePath = path.join(transcriptsDir, 'test-file.html');
+        const testContent = `<html><body><h1>Test File</h1><p>Creato il ${new Date().toISOString()}</p></body></html>`;
+        fs.writeFileSync(testFilePath, testContent);
+        
+        // Leggi i file nella cartella
+        const files = fs.readdirSync(transcriptsDir);
+        const fileDetails = files.map(file => {
+            const filePath = path.join(transcriptsDir, file);
+            const stats = fs.statSync(filePath);
+            return {
+                name: file,
+                path: filePath,
+                size: stats.size,
+                created: stats.birthtime,
+                modified: stats.mtime
+            };
+        });
+        
+        res.json({
+            success: true,
+            projectRoot,
+            transcriptsDir,
+            transcriptsExists: fs.existsSync(transcriptsDir),
+            writable: true,
+            testFileCreated: fs.existsSync(testFilePath),
+            files: fileDetails,
+            allFileNames: files
+        });
+        
+    } catch (error) {
+        res.json({
+            success: false,
+            error: error.message,
+            projectRoot,
+            transcriptsDir,
+            transcriptsExists: fs.existsSync(transcriptsDir)
+        });
+    }
+});
+
 app.post('/api/ticket/send-message', async (req, res) => {
     try {
         const { ticketId, message } = req.body;
