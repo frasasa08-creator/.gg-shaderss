@@ -839,7 +839,7 @@ app.get('/transcripts/:ticketId', async (req, res) => {
 
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
 app.get('/transcript/:identifier', (req, res) => {
-    const identifier = req.params.identifier.toLowerCase();
+    const identifier = req.params.identifier;
     const transcriptDir = path.join(__dirname, 'transcripts');
     
     console.log(`🔍 Ricerca transcript: ${identifier}`);
@@ -849,16 +849,12 @@ app.get('/transcript/:identifier', (req, res) => {
     if (!fs.existsSync(transcriptDir)) {
         console.log('📁 Creo cartella transcripts...');
         fs.mkdirSync(transcriptDir, { recursive: true });
-        
-        // Crea un file .gitkeep per mantenere la cartella
-        const gitkeepPath = path.join(transcriptDir, '.gitkeep');
-        if (!fs.existsSync(gitkeepPath)) {
-            fs.writeFileSync(gitkeepPath, '');
-        }
     }
     
-    // Cerca il file esatto
+    // Cerca il file esatto (SENZA .html nell'identifier)
     const exactPath = path.join(transcriptDir, `${identifier}.html`);
+    console.log(`🔍 Percorso cercato: ${exactPath}`);
+    console.log(`🔍 File esiste? ${fs.existsSync(exactPath)}`);
     
     if (fs.existsSync(exactPath)) {
         console.log(`✅ Transcript trovato: ${identifier}.html`);
@@ -866,22 +862,35 @@ app.get('/transcript/:identifier', (req, res) => {
         return res.sendFile(exactPath);
     }
     
-    // Se non trova il file, mostra tutti i file disponibili per debug
+    // Se non trova il file esatto, cerca file simili
     try {
         const allFiles = fs.readdirSync(transcriptDir)
             .filter(f => f.endsWith('.html') && f !== '.gitkeep');
         
-        console.log(`📁 File disponibili nella cartella:`, allFiles);
+        console.log(`📁 Tutti i file nella cartella:`, allFiles);
         
-        // Cerca file che contengono l'identifier nel nome
+        // Cerca file che corrispondono esattamente (case insensitive)
         const matchingFiles = allFiles.filter(file => {
-            const fileNameWithoutExt = file.replace('.html', '').toLowerCase();
-            return fileNameWithoutExt.includes(identifier) || identifier.includes(fileNameWithoutExt);
+            const fileNameWithoutExt = file.replace('.html', '');
+            return fileNameWithoutExt.toLowerCase() === identifier.toLowerCase();
         });
         
         if (matchingFiles.length > 0) {
-            console.log(`✅ Transcript trovato con match parziale: ${matchingFiles[0]}`);
+            console.log(`✅ Transcript trovato con match case-insensitive: ${matchingFiles[0]}`);
             const filePath = path.join(transcriptDir, matchingFiles[0]);
+            res.setHeader('Content-Type', 'text/html');
+            return res.sendFile(filePath);
+        }
+        
+        // Cerca file che contengono l'identifier
+        const partialMatches = allFiles.filter(file => {
+            const fileNameWithoutExt = file.replace('.html', '').toLowerCase();
+            return fileNameWithoutExt.includes(identifier.toLowerCase());
+        });
+        
+        if (partialMatches.length > 0) {
+            console.log(`✅ Transcript trovato con match parziale: ${partialMatches[0]}`);
+            const filePath = path.join(transcriptDir, partialMatches[0]);
             res.setHeader('Content-Type', 'text/html');
             return res.sendFile(filePath);
         }
@@ -892,10 +901,10 @@ app.get('/transcript/:identifier', (req, res) => {
         console.error('Errore ricerca transcript:', error);
     }
 
-    // === SE IL FILE NON ESISTE (ELIMINATO) ===
-    console.log(`❌ Transcript eliminato/non trovato: ${identifier}`);
+    // === SE IL FILE NON ESISTE ===
+    console.log(`❌ Transcript non trovato: ${identifier}`);
     
-    // Mostra pagina di errore specifica per transcript eliminato
+    // Mostra pagina di errore con informazioni dettagliate
     let folderInfo = 'Cartella non esistente';
     let fileCount = 0;
     let allFilesList = [];
@@ -917,7 +926,7 @@ app.get('/transcript/:identifier', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcript Eliminato</title>
+    <title>Transcript Non Trovato</title>
     <style>
         body { 
             background: #1e1f23; 
@@ -946,6 +955,8 @@ app.get('/transcript/:identifier', (req, res) => {
             border-radius: 5px;
             margin: 10px 0;
             text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
         }
         .btn {
             display: inline-block;
@@ -977,16 +988,23 @@ app.get('/transcript/:identifier', (req, res) => {
             margin: 20px 0;
             font-weight: 600;
         }
+        .file-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #40444b;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
-    <h1>🗑️ Transcript Eliminato</h1>
+    <h1>🔍 Transcript Non Trovato</h1>
     
     <div class="warning">
-        ⚠️ Questo transcript è stato eliminato e non è più disponibile
+        ⚠️ Il transcript richiesto non è stato trovato nel sistema
     </div>
     
-    <p>Il ticket <span class="discord">#${identifier}</span> è stato eliminato dal sistema.</p>
+    <p>Il transcript <span class="discord">${identifier}</span> non esiste o non è più disponibile.</p>
     
     <div class="debug">
         <strong>🔧 Informazioni di Debug:</strong><br><br>
@@ -997,22 +1015,34 @@ app.get('/transcript/:identifier', (req, res) => {
         <strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}<br>
         <strong>Tempo:</strong> ${new Date().toLocaleString('it-IT')}<br><br>
         
-        <strong>📁 File disponibili:</strong>
+        <strong>📁 File disponibili (${fileCount}):</strong>
         <div class="file-list">
-            ${allFilesList.length > 0 ? allFilesList.map(file => `• ${file}`).join('<br>') : 'Nessun file transcript trovato'}
+            ${allFilesList.length > 0 ? 
+                allFilesList.map(file => `
+                    <div class="file-item">
+                        <strong>${file}</strong><br>
+                        <small>Nome senza estensione: ${file.replace('.html', '')}</small>
+                    </div>
+                `).join('') : 
+                'Nessun file transcript trovato'
+            }
         </div>
     </div>
 
     <div style="margin-top: 30px;">
+        <a href="/debug-transcripts-files" class="btn">🔍 Debug Dettagliato</a>
         <a href="/transcripts" class="btn">📂 Vedi Transcript Disponibili</a>
         <a href="/" class="btn btn-secondary">🏠 Torna alla Home</a>
     </div>
 
     <div style="margin-top: 40px; padding: 20px; background: #2f3136; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
-        <h3>💡 Informazioni</h3>
-        <p>I transcript dei ticket vengono conservati per <strong>7 giorni</strong> dalla chiusura.</p>
-        <p>Dopo questo periodo, vengono automaticamente eliminati per ottimizzare lo spazio.</p>
-        <p>Se hai bisogno di conservare un transcript, scaricalo prima della scadenza.</p>
+        <h3>💡 Possibili cause:</h3>
+        <ul style="text-align: left; margin: 15px 0;">
+            <li>Il transcript è stato eliminato</li>
+            <li>Il nome del file non corrisponde</li>
+            <li>Problemi di case sensitivity</li>
+            <li>Il transcript non è stato ancora generato</li>
+        </ul>
     </div>
 </body>
 </html>
