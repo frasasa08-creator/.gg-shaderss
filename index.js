@@ -402,64 +402,60 @@ app.get('/api/status', (req, res) => {
     }
 });
 
-// API per inviare messaggi ai ticket
 app.post('/api/ticket/send-message', async (req, res) => {
     try {
         const { ticketId, message } = req.body;
-        const userId = req.user.id;
         const username = req.user.username;
 
-        console.log(`📨 Tentativo invio messaggio per ticket ${ticketId} da ${username}: ${message}`);
+        console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}`);
 
-        // Trova il ticket nel database
-        const ticket = await Ticket.findOne({ ticketId: ticketId });
-        if (!ticket) {
-            console.log('❌ Ticket non trovato nel database');
+        // 1. Cerca il ticket (usa la tua tabella tickets esistente)
+        const ticketResult = await db.query(
+            'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1',
+            [ticketId]
+        );
+        
+        if (ticketResult.rows.length === 0) {
             return res.status(404).json({ error: 'Ticket non trovato' });
         }
 
-        // Verifica permessi utente
-        const hasAccess = await checkUserAccess(req.user, ticket.guildId);
-        if (!hasAccess) {
-            console.log('❌ Accesso negato per utente');
-            return res.status(403).json({ error: 'Accesso negato' });
+        const ticket = ticketResult.rows[0];
+
+        // 2. Salva il messaggio nella NUOVA tabella messages
+        await db.query(
+            'INSERT INTO messages (ticket_id, username, content) VALUES ($1, $2, $3)',
+            [ticketId, username, message]
+        );
+
+        // 3. Invia su Discord
+        const channel = client.channels.cache.get(ticket.channel_id);
+        if (channel) {
+            await channel.send(`**${username}:** ${message}`);
+            console.log('✅ Messaggio inviato su Discord');
         }
 
-        // Trova il canale Discord
-        const channel = client.channels.cache.get(ticket.channelId);
-        if (!channel) {
-            console.log('❌ Canale Discord non trovato');
-            return res.status(404).json({ error: 'Canale non trovato' });
-        }
-
-        // ✅ INVIA MESSAGGIO SEMPLICE SU DISCORD
-        await channel.send(`**${username}:** ${message}`);
-        console.log('✅ Messaggio inviato su Discord');
-
-        // Aggiorna il transcript nel database
-        // Funzione per aggiornare il transcript
-        async function updateTranscript(ticketId, username, message) {
-            try {
-                await Ticket.findOneAndUpdate(
-                    { ticketId: ticketId },
-                    {
-                        $push: {
-                            transcript: {
-                                user: username,
-                                content: message,
-                                timestamp: new Date()
-                            }
-                        }
-                    }
-                );
-            } catch (error) {
-                console.error('❌ Errore aggiornamento transcript:', error);
-            }
-        }
+        res.json({ success: true });
 
     } catch (error) {
-        console.error('❌ Errore invio messaggio ticket:', error);
-        res.status(500).json({ error: 'Errore interno del server' });
+        console.error('❌ Errore invio messaggio:', error);
+        res.status(500).json({ error: 'Errore interno' });
+    }
+});
+
+app.get('/api/ticket/:ticketId/messages', async (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        
+        const result = await db.query(
+            'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY timestamp',
+            [ticketId]
+        );
+        
+        res.json(result.rows);
+        
+    } catch (error) {
+        console.error('❌ Errore recupero messaggi:', error);
+        res.status(500).json({ error: 'Errore interno' });
     }
 });
 
