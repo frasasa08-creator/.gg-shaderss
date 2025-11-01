@@ -28,7 +28,6 @@ try {
  * Pulizia automatica transcript dopo 7 giorni
  */
 async function cleanupOldTranscripts(days = 7) {
-    const transcriptDir = path.join(__dirname, '..', 'transcripts');
     if (!fs.existsSync(transcriptDir)) return;
 
     const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
@@ -258,7 +257,7 @@ async function closeTicketWithReason(interaction) {
         console.log(`Transcript generato.`);
 
         // === SALVA TRANSCRIPT CON NOME CANALE E SERVER ID ===
-        const transcriptDir = path.join(__dirname, '..', 'transcripts');
+         
         console.log(`📁 Percorso cartella transcripts: ${transcriptDir}`);
 
         // Crea la cartella se non esiste
