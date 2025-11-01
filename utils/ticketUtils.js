@@ -261,11 +261,6 @@ async function closeTicketWithReason(interaction) {
         const transcript = await generateOblivionBotTranscript(channel, ticket.id);
         console.log(`Transcript generato.`);
 
-        // === DEBUG PRIMA DI SALVARE ===
-        console.log('📁 DEBUG SALVATAGGIO:');
-        console.log('   - Transcript Dir:', transcriptDir);
-        console.log('   - Dir exists:', fs.existsSync(transcriptDir));
-        console.log('   - Dir writable:', true); // Su Render dovrebbe essere sempre scrivibile
         
         // Prova a creare un file di test
         const testFile = path.join(transcriptDir, `test-${Date.now()}.txt`);
@@ -293,10 +288,16 @@ async function closeTicketWithReason(interaction) {
             console.log('✅ Cartella transcripts già esistente');
         }
 
+        // === DEBUG PRIMA DI SALVARE ===
+        console.log('📁 DEBUG SALVATAGGIO:');
+        console.log('   - Transcript Dir:', transcriptDir);
+        console.log('   - Dir exists:', fs.existsSync(transcriptDir));
+        console.log('   - Dir writable:', true); // Su Render dovrebbe essere sempre scrivibile
+
         // Recupera il tipo di ticket e l'utente creatore dal database
         const ticketType = ticket.ticket_type.toLowerCase().replace(/\s+/g, '-');
 
-        // ✅ CORRETTO: Recupera l'utente che ha CREATO il ticket
+        //Recupera l'utente che ha CREATO il ticket
         let ticketCreatorUser = null;
         try {
             ticketCreatorUser = await interaction.client.users.fetch(ticket.user_id);
