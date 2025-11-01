@@ -2259,7 +2259,7 @@ function broadcastTicketMessage(ticketId, message) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// ROUTE: /ticket/:id → CHAT WEB
+// ROUTE: /ticket/:id → CHAT WEB (CORRETTA)
 // ═══════════════════════════════════════════════════════════
 
 app.get('/ticket/:id', async (req, res) => {
@@ -2292,8 +2292,8 @@ app.get('/ticket/:id', async (req, res) => {
             return res.status(403).send('<h1>Accesso negato</h1>');
         }
 
-        // HTML + CSS + JS inline
-        res.send(`
+        // === HTML CORRETTO CON BACKTICK SICURI ===
+        const html = `
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -2320,7 +2320,7 @@ app.get('/ticket/:id', async (req, res) => {
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            <h3>Ticket #${ticket.id} - ${ticket.category}</h3>
+            <h3>Ticket #${ticket.id} - ${ticket.category || 'N/A'}</h3>
             <p>Utente: <strong>${ticket.username}</strong></p>
         </div>
         <div id="messages" class="chat-messages"></div>
@@ -2350,15 +2350,21 @@ app.get('/ticket/:id', async (req, res) => {
         function addMessage(msg) {
             const div = document.createElement('div');
             div.className = 'message';
-            div.innerHTML = `
-                <div class="message-header">
-                    <strong>${msg.username}</strong>
-                    <span class="timestamp">${new Date(msg.created_at || msg.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <div class="message-content">${msg.content.replace(/\\*\\*/g, '')}</div>
-            `;
+            const time = new Date(msg.created_at || msg.timestamp).toLocaleTimeString('it-IT');
+            div.innerHTML = 
+                '<div class="message-header">' +
+                    '<strong>' + escapeHtml(msg.username) + '</strong>' +
+                    '<span class="timestamp">' + time + '</span>' +
+                '</div>' +
+                '<div class="message-content">' + escapeHtml(msg.content).replace(/\\*\\*/g, '') + '</div>';
             messagesDiv.appendChild(div);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         async function sendMessage() {
@@ -2381,8 +2387,9 @@ app.get('/ticket/:id', async (req, res) => {
         });
     </script>
 </body>
-</html>
-        `);
+</html>`;
+
+        res.send(html);
     } catch (error) {
         console.error('Errore pagina ticket:', error);
         res.status(500).send('Errore server');
