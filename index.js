@@ -429,18 +429,50 @@ app.post('/api/ticket/send-message', async (req, res) => {
     }
 });
 
-// Frontend - Aggiorna la chat ogni 2 secondi
-/*function aggiornaChat() {
-    fetch(`/api/ticket/${ticketId}/messages`)
-        .then(response => response.json())
-        .then(messages => {
-            // Aggiorna l'interfaccia chat
-            mostraMessaggi(messages);
-        });
+let currentTicketId = null;
+let stopChatUpdate = null;
+
+// Quando apri un ticket
+function apriTicket(ticketId) {
+    currentTicketId = ticketId;
+    
+    // Ferma eventuali aggiornamenti precedenti
+    if (stopChatUpdate) {
+        stopChatUpdate();
+    }
+    
+    // Avvia aggiornamento per questo ticket
+    stopChatUpdate = initChat(ticketId);
 }
 
-// Aggiorna ogni 2 secondi
-setInterval(aggiornaChat, 2000);*/
+// Funzione per inizializzare l'aggiornamento chat
+function initChat(ticketId) {
+    let isActive = true;
+    
+    async function aggiornaChat() {
+        if (!isActive || !ticketId) return;
+        
+        try {
+            const response = await fetch(`/api/ticket/${ticketId}/messages`);
+            const messages = await response.json();
+            aggiornaInterfacciaChat(messages);
+        } catch (error) {
+            console.error('Errore aggiornamento chat:', error);
+        }
+    }
+    
+    // Primo aggiornamento immediato
+    aggiornaChat();
+    
+    // Aggiorna ogni 3 secondi
+    const intervalId = setInterval(aggiornaChat, 3000);
+    
+    // Funzione per fermare l'aggiornamento
+    return () => {
+        isActive = false;
+        clearInterval(intervalId);
+    };
+}
 
 
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
