@@ -2424,7 +2424,7 @@ app.post('/ticket/:id/send', async (req, res) => {
         const channel = client.channels.cache.get(ticketRes.rows[0].channel_id);
         if (!channel) return res.status(410).json({ error: 'Canale non trovato' });
 
-        const formatted = \`**[STAFF]: ${message.trim()}**\`;
+        const formatted = "**[STAFF]: " + message.trim() + "**";
         await channel.send(formatted);
 
         const staffUser = await client.users.fetch(req.session.user.id);
