@@ -430,7 +430,8 @@ app.post('/api/ticket/send-message', async (req, res) => {
         // 3. Invia su Discord
         const channel = client.channels.cache.get(ticket.channel_id);
         if (channel) {
-            await channel.send(`**${username}:** ${message}`);
+            const discordMessage = `<:discotoolsxyzicon17:1434216653524176896> **[STAFF]** : ${message}`;
+            await channel.send(discordMessage);
             console.log('✅ Messaggio inviato su Discord');
         }
 
