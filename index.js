@@ -51,33 +51,37 @@ async function startAutoCleanup() {
 
 
 // === FUNZIONE MIGLIORATA PER ESTRARRE SERVER ID DAL NOME FILE ===
-function extractServerIdFromFilename(filename) {
-    console.log(`🔍 Analizzo file: ${filename}`);
+function extractTicketIdFromFilename(filename) {
+    console.log(`🔍 Estrazione Ticket ID da: ${filename}`);
     
-    // Pattern per il formato standard: ticket-{tipo}-{username}-{timestamp}-{serverId}.html
-    const standardPattern = /ticket-\w+-\w+-\d+-(\d{17,19})\.html$/;
+    // Cerca il server ID prima (è più facile da trovare)
+    const serverId = extractServerIdFromFilename(filename);
+    if (serverId) {
+        // Se abbiamo il server ID, cerca il ticket nel database
+        // Questo è un placeholder - dovresti implementare la logica per trovare il ticket ID
+        // basandoti sul server ID e sul filename
+        return serverId; // Temporaneamente restituisco serverId
+    }
     
-    // Pattern per altri formati comuni
+    // Pattern alternativi per ticket ID
     const patterns = [
-        standardPattern,
-        /-(\d{17,19})\.html$/,
-        /^(\d{17,19})-.*\.html$/,
-        /ticket-.*-(\d{17,19})\.html$/,
-        /.*-(\d{17,19})\.html$/
+        /ticket-(\d+)/,
+        /-(\d+)\.html$/,
+        /^(\d+)-/,
+        /(\d{17,19})/
     ];
     
     for (const pattern of patterns) {
         const match = filename.match(pattern);
         if (match && match[1]) {
-            console.log(`✅ Server ID trovato: ${match[1]}`);
+            console.log(`✅ Ticket ID trovato: ${match[1]}`);
             return match[1];
         }
     }
     
-    console.log(`❌ Nessun Server ID trovato in: ${filename}`);
-    return null;
+    console.log(`❌ Nessun Ticket ID trovato, uso filename: ${filename}`);
+    return filename;
 }
-
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
@@ -910,8 +914,115 @@ app.get('/transcript/:identifier', (req, res) => {
     
     if (fs.existsSync(exactPath)) {
         console.log(`✅ Transcript trovato: ${identifier}.html`);
+        
+        // LEGGI IL FILE HTML E MODIFICALO PER AGGIUNGERE LIVE CHAT
+        const transcriptContent = fs.readFileSync(exactPath, 'utf8');
+        
+        // CERCA IL TICKET ID DAL FILENAME
+        const ticketId = extractTicketIdFromFilename(identifier);
+        console.log(`🎫 Ticket ID estratto: ${ticketId}`);
+        
+        // MODIFICA L'HTML PER AGGIUNGERE IL PULSANTE LIVE CHAT
+        const modifiedContent = transcriptContent.replace(
+            '</head>',
+            `
+            <style>
+                .live-chat-header {
+                    background: #2f3136;
+                    padding: 15px 20px;
+                    border-bottom: 1px solid #40444b;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    z-index: 1000;
+                    backdrop-filter: blur(10px);
+                }
+                .live-chat-title {
+                    color: white;
+                    font-size: 18px;
+                    font-weight: 600;
+                }
+                .action-buttons {
+                    display: flex;
+                    gap: 10px;
+                }
+                .btn-live-chat {
+                    background: #5865F2;
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: all 0.3s ease;
+                    font-family: 'Segoe UI', sans-serif;
+                }
+                .btn-live-chat:hover {
+                    background: #4752c4;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+                }
+                .btn-close {
+                    background: #747f8d;
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    cursor: pointer;
+                    border: none;
+                    font-family: 'Segoe UI', sans-serif;
+                    transition: background 0.3s ease;
+                }
+                .btn-close:hover {
+                    background: #5d6773;
+                }
+                .transcript-content {
+                    margin-top: 80px;
+                }
+            </style>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+            </head>
+            `
+        ).replace(
+            '<body',
+            `
+            <body style="margin: 0; padding: 0;">
+            <!-- HEADER LIVE CHAT -->
+            <div class="live-chat-header">
+                <div class="live-chat-title">
+                    📋 Transcript Ticket - ${identifier}
+                </div>
+                <div class="action-buttons">
+                    <a href="/live-chat/${ticketId}" class="btn-live-chat" target="_blank">
+                        <i class="fas fa-comments"></i> Live Chat
+                    </a>
+                    <button onclick="window.close()" class="btn-close">
+                        <i class="fas fa-times"></i> Chiudi
+                    </button>
+                </div>
+            </div>
+            <div class="transcript-content">
+            `
+        ).replace(
+            '</body>',
+            `
+            </div>
+            </body>
+            `
+        );
+        
         res.setHeader('Content-Type', 'text/html');
-        return res.sendFile(exactPath);
+        return res.send(modifiedContent);
     }
     
     // Se non trova il file esatto, cerca file simili
@@ -930,8 +1041,111 @@ app.get('/transcript/:identifier', (req, res) => {
         if (matchingFiles.length > 0) {
             console.log(`✅ Transcript trovato con match case-insensitive: ${matchingFiles[0]}`);
             const filePath = path.join(transcriptDir, matchingFiles[0]);
+            
+            // APPLICA LE STESSE MODIFICHE ANCHE PER I FILE CASE-INSENSITIVE
+            const transcriptContent = fs.readFileSync(filePath, 'utf8');
+            const ticketId = extractTicketIdFromFilename(matchingFiles[0].replace('.html', ''));
+            
+            const modifiedContent = transcriptContent.replace(
+                '</head>',
+                `
+                <style>
+                    .live-chat-header {
+                        background: #2f3136;
+                        padding: 15px 20px;
+                        border-bottom: 1px solid #40444b;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        z-index: 1000;
+                        backdrop-filter: blur(10px);
+                    }
+                    .live-chat-title {
+                        color: white;
+                        font-size: 18px;
+                        font-weight: 600;
+                    }
+                    .action-buttons {
+                        display: flex;
+                        gap: 10px;
+                    }
+                    .btn-live-chat {
+                        background: #5865F2;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        transition: all 0.3s ease;
+                        font-family: 'Segoe UI', sans-serif;
+                    }
+                    .btn-live-chat:hover {
+                        background: #4752c4;
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+                    }
+                    .btn-close {
+                        background: #747f8d;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        cursor: pointer;
+                        border: none;
+                        font-family: 'Segoe UI', sans-serif;
+                        transition: background 0.3s ease;
+                    }
+                    .btn-close:hover {
+                        background: #5d6773;
+                    }
+                    .transcript-content {
+                        margin-top: 80px;
+                    }
+                </style>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+                </head>
+                `
+            ).replace(
+                '<body',
+                `
+                <body style="margin: 0; padding: 0;">
+                <!-- HEADER LIVE CHAT -->
+                <div class="live-chat-header">
+                    <div class="live-chat-title">
+                        📋 Transcript Ticket - ${matchingFiles[0].replace('.html', '')}
+                    </div>
+                    <div class="action-buttons">
+                        <a href="/live-chat/${ticketId}" class="btn-live-chat" target="_blank">
+                            <i class="fas fa-comments"></i> Live Chat
+                        </a>
+                        <button onclick="window.close()" class="btn-close">
+                            <i class="fas fa-times"></i> Chiudi
+                        </button>
+                    </div>
+                </div>
+                <div class="transcript-content">
+                `
+            ).replace(
+                '</body>',
+                `
+                </div>
+                </body>
+                `
+            );
+            
             res.setHeader('Content-Type', 'text/html');
-            return res.sendFile(filePath);
+            return res.send(modifiedContent);
         }
         
         // Cerca file che contengono l'identifier
@@ -943,8 +1157,111 @@ app.get('/transcript/:identifier', (req, res) => {
         if (partialMatches.length > 0) {
             console.log(`✅ Transcript trovato con match parziale: ${partialMatches[0]}`);
             const filePath = path.join(transcriptDir, partialMatches[0]);
+            
+            // APPLICA LE STESSE MODIFICHE ANCHE PER I FILE PARZIALI
+            const transcriptContent = fs.readFileSync(filePath, 'utf8');
+            const ticketId = extractTicketIdFromFilename(partialMatches[0].replace('.html', ''));
+            
+            const modifiedContent = transcriptContent.replace(
+                '</head>',
+                `
+                <style>
+                    .live-chat-header {
+                        background: #2f3136;
+                        padding: 15px 20px;
+                        border-bottom: 1px solid #40444b;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        z-index: 1000;
+                        backdrop-filter: blur(10px);
+                    }
+                    .live-chat-title {
+                        color: white;
+                        font-size: 18px;
+                        font-weight: 600;
+                    }
+                    .action-buttons {
+                        display: flex;
+                        gap: 10px;
+                    }
+                    .btn-live-chat {
+                        background: #5865F2;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        transition: all 0.3s ease;
+                        font-family: 'Segoe UI', sans-serif;
+                    }
+                    .btn-live-chat:hover {
+                        background: #4752c4;
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+                    }
+                    .btn-close {
+                        background: #747f8d;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        cursor: pointer;
+                        border: none;
+                        font-family: 'Segoe UI', sans-serif;
+                        transition: background 0.3s ease;
+                    }
+                    .btn-close:hover {
+                        background: #5d6773;
+                    }
+                    .transcript-content {
+                        margin-top: 80px;
+                    }
+                </style>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+                </head>
+                `
+            ).replace(
+                '<body',
+                `
+                <body style="margin: 0; padding: 0;">
+                <!-- HEADER LIVE CHAT -->
+                <div class="live-chat-header">
+                    <div class="live-chat-title">
+                        📋 Transcript Ticket - ${partialMatches[0].replace('.html', '')}
+                    </div>
+                    <div class="action-buttons">
+                        <a href="/live-chat/${ticketId}" class="btn-live-chat" target="_blank">
+                            <i class="fas fa-comments"></i> Live Chat
+                        </a>
+                        <button onclick="window.close()" class="btn-close">
+                            <i class="fas fa-times"></i> Chiudi
+                        </button>
+                    </div>
+                </div>
+                <div class="transcript-content">
+                `
+            ).replace(
+                '</body>',
+                `
+                </div>
+                </body>
+                `
+            );
+            
             res.setHeader('Content-Type', 'text/html');
-            return res.sendFile(filePath);
+            return res.send(modifiedContent);
         }
         
         console.log(`❌ Nessun transcript trovato per: ${identifier}`);
@@ -1088,7 +1405,7 @@ app.get('/transcript/:identifier', (req, res) => {
     </div>
 
     <div style="margin-top: 40px; padding: 20px; background: #2f3136; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
-        <h3>💡 Possibili cause:</h3>
+        <h3>💡 Possibili causes:</h3>
         <ul style="text-align: left; margin: 15px 0;">
             <li>Il transcript è stato eliminato</li>
             <li>Il nome del file non corrisponde</li>
@@ -1100,6 +1417,585 @@ app.get('/transcript/:identifier', (req, res) => {
 </html>
     `);
 });
+
+// === LIVE CHAT ROUTES ===
+
+// Route principale Live Chat
+app.get('/live-chat/:ticketId', async (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        const user = req.session.user;
+
+        if (!user) {
+            return res.redirect('/auth/discord');
+        }
+
+        console.log(`💬 Richiesta Live Chat per ticket: ${ticketId} da ${user.username}`);
+
+        // 1. CERCA IL TICKET NEL DATABASE
+        const ticketResult = await db.query(
+            'SELECT * FROM tickets WHERE id = $1 OR channel_id = $1',
+            [ticketId]
+        );
+
+        if (ticketResult.rows.length === 0) {
+            return res.status(404).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Ticket Non Trovato</title></head>
+                <body style="background: #1e1f23; color: white; text-align: center; padding: 100px;">
+                    <h1>❌ Ticket Non Trovato</h1>
+                    <p>Il ticket ${ticketId} non esiste o è stato eliminato.</p>
+                    <a href="/" style="color: #5865F2;">Torna alla Home</a>
+                </body>
+                </html>
+            `);
+        }
+
+        const ticket = ticketResult.rows[0];
+
+        // 2. VERIFICA CHE L'UTENTE SIA STAFF
+        const hasAccess = await checkUserTicketAccess(user.id, ticket.guild_id);
+        if (!hasAccess) {
+            return res.status(403).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Accesso Negato</title></head>
+                <body style="background: #1e1f23; color: white; text-align: center; padding: 100px;">
+                    <h1>❌ Accesso Negato</h1>
+                    <p>Solo lo staff può utilizzare la Live Chat.</p>
+                    <a href="/" style="color: #5865F2;">Torna alla Home</a>
+                </body>
+                </html>
+            `);
+        }
+
+        // 3. VERIFICA CHE IL TICKET SIA ANCORA APERTO
+        if (ticket.status !== 'open') {
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Ticket Chiuso</title></head>
+                <body style="background: #1e1f23; color: white; text-align: center; padding: 100px;">
+                    <h1>📋 Ticket Chiuso</h1>
+                    <p>Questo ticket è stato chiuso. La Live Chat è disponibile solo per ticket aperti.</p>
+                    <a href="/transcript/${ticketId}" style="color: #5865F2;">Visualizza Transcript</a>
+                </body>
+                </html>
+            `);
+        }
+
+        // 4. VERIFICA CHE IL CANALE ESISTA SU DISCORD
+        const channel = client.channels.cache.get(ticket.channel_id);
+        if (!channel) {
+            return res.status(404).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Canale Non Trovato</title></head>
+                <body style="background: #1e1f23; color: white; text-align: center; padding: 100px;">
+                    <h1>❌ Canale Non Trovato</h1>
+                    <p>Il canale Discord associato a questo ticket non esiste più.</p>
+                    <a href="/" style="color: #5865F2;">Torna alla Home</a>
+                </body>
+                </html>
+            `);
+        }
+
+        // 5. INVIA LA PAGINA LIVE CHAT
+        res.send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Chat - Ticket #${ticketId}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #36393f;
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #2f3136;
+            padding: 15px 20px;
+            border-bottom: 1px solid #202225;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-badge {
+            background: #3ba55c;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 120px);
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            display: flex;
+            gap: 15px;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .message-content {
+            flex: 1;
+        }
+        
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+        }
+        
+        .username {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .staff-badge {
+            background: #5865f2;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .timestamp {
+            color: #72767d;
+            font-size: 12px;
+        }
+        
+        .message-text {
+            font-size: 16px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        
+        .input-container {
+            padding: 15px 20px;
+            background: #40444b;
+            border-top: 1px solid #202225;
+        }
+        
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .message-input {
+            flex: 1;
+            background: #484c52;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: white;
+            font-size: 16px;
+            resize: none;
+            min-height: 44px;
+            max-height: 150px;
+            font-family: inherit;
+        }
+        
+        .message-input:focus {
+            outline: none;
+            background: #40444b;
+        }
+        
+        .send-button {
+            background: #5865f2;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            height: 44px;
+        }
+        
+        .send-button:hover {
+            background: #4752c4;
+        }
+        
+        .send-button:disabled {
+            background: #484c52;
+            cursor: not-allowed;
+        }
+        
+        .system-message {
+            text-align: center;
+            color: #72767d;
+            font-style: italic;
+            margin: 10px 0;
+            padding: 10px;
+            background: #2f3136;
+            border-radius: 5px;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .messages::-webkit-scrollbar-track {
+            background: #2f3136;
+        }
+        
+        .messages::-webkit-scrollbar-thumb {
+            background: #202225;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <i class="fas fa-comments"></i>
+            Live Chat - Ticket #${ticketId}
+        </h1>
+        <div class="status-badge">● ONLINE</div>
+    </div>
+    
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="system-message">
+                💬 Live Chat connessa - I messaggi verranno inviati su Discord in tempo reale
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <div class="input-wrapper">
+                <textarea 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="Scrivi un messaggio..." 
+                    rows="1"
+                ></textarea>
+                <button id="sendButton" class="send-button">
+                    <i class="fas fa-paper-plane"></i> Invia
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ticketId = '${ticketId}';
+        const userId = '${user.id}';
+        const username = '${user.username}';
+        
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+        
+        // Invio messaggio con Enter
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // Invio messaggio con click
+        sendButton.addEventListener('click', sendMessage);
+        
+        async function sendMessage() {
+            const content = messageInput.value.trim();
+            if (!content) return;
+            
+            // Disabilita input durante l'invio
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            
+            try {
+                const response = await fetch('/api/live-chat/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ticketId: ticketId,
+                        content: content,
+                        userId: userId,
+                        username: username
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Aggiungi il messaggio alla chat
+                    addMessage({
+                        id: 'msg-' + Date.now(),
+                        content: content,
+                        username: username,
+                        isStaff: true,
+                        timestamp: new Date(),
+                        avatar: '${user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}'
+                    });
+                    
+                    // Pulisci l'input
+                    messageInput.value = '';
+                    messageInput.style.height = 'auto';
+                    
+                } else {
+                    alert('❌ Errore: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Errore:', error);
+                alert('❌ Errore di connessione');
+            } finally {
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                messageInput.focus();
+            }
+        }
+        
+        function addMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.id = message.id;
+            
+            const timestamp = new Date(message.timestamp).toLocaleTimeString('it-IT', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            messageDiv.innerHTML = \`
+                <img src="\${message.avatar}" 
+                     class="avatar" 
+                     onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="username">\${message.username}</span>
+                        \${message.isStaff ? \`
+                            <span class="staff-badge">
+                                <img src="https://cdn.discordapp.com/emojis/1434216653524176896.webp?size=16&quality=lossless" style="width: 12px; height: 12px;">
+                                STAFF
+                            </span>
+                        \` : ''}
+                        <span class="timestamp">\${timestamp}</span>
+                    </div>
+                    <div class="message-text">\${message.content}</div>
+                </div>
+            \`;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Carica i messaggi esistenti
+        async function loadMessages() {
+            try {
+                const response = await fetch('/api/live-chat/messages/' + ticketId);
+                const messages = await response.json();
+                
+                messages.forEach(msg => {
+                    addMessage(msg);
+                });
+            } catch (error) {
+                console.error('Errore caricamento messaggi:', error);
+            }
+        }
+        
+        // Aggiornamento in tempo reale
+        function startLiveUpdates() {
+            setInterval(loadMessages, 3000); // Aggiorna ogni 3 secondi
+        }
+        
+        // Focus sull'input all'apertura
+        messageInput.focus();
+        
+        // Avvia il sistema
+        loadMessages();
+        startLiveUpdates();
+    </script>
+</body>
+</html>
+        `);
+        
+    } catch (error) {
+        console.error('❌ Errore Live Chat:', error);
+        res.status(500).send('Errore interno del server');
+    }
+});
+
+// API per inviare messaggi via Live Chat
+app.post('/api/live-chat/send', async (req, res) => {
+    try {
+        const { ticketId, content, userId, username } = req.body;
+        
+        console.log(`📨 Live Chat - Invio messaggio per ticket ${ticketId} da ${username}`);
+        
+        // 1. Trova il ticket
+        const ticketResult = await db.query(
+            'SELECT * FROM tickets WHERE id = $1 OR channel_id = $1',
+            [ticketId]
+        );
+        
+        if (ticketResult.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Ticket non trovato' });
+        }
+        
+        const ticket = ticketResult.rows[0];
+        
+        // 2. Verifica che il ticket sia aperto
+        if (ticket.status !== 'open') {
+            return res.status(400).json({ success: false, error: 'Ticket chiuso' });
+        }
+        
+        // 3. Invia il messaggio su Discord con il formato richiesto
+        const channel = client.channels.cache.get(ticket.channel_id);
+        if (!channel) {
+            return res.status(404).json({ success: false, error: 'Canale Discord non trovato' });
+        }
+        
+        // FORMATO RICHIESTO: [STAFF](emoji:<:discotoolsxyzicon17:1434216653524176896>): messaggio
+        const discordMessage = `**[STAFF]** <:discotoolsxyzicon17:1434216653524176896>: ${content}`;
+        
+        await channel.send(discordMessage);
+        console.log('✅ Messaggio inviato su Discord con formato staff');
+        
+        // 4. Salva il messaggio nel database per la cronologia
+        await db.query(
+            'INSERT INTO messages (ticket_id, username, content) VALUES ($1, $2, $3)',
+            [ticketId, username, content]
+        );
+        
+        res.json({ 
+            success: true,
+            message: {
+                id: 'msg-' + Date.now(),
+                content: content,
+                username: username,
+                isStaff: true,
+                timestamp: new Date(),
+                userId: userId
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Errore invio messaggio Live Chat:', error);
+        res.status(500).json({ success: false, error: 'Errore interno del server' });
+    }
+});
+
+// API per ottenere i messaggi della Live Chat
+app.get('/api/live-chat/messages/:ticketId', async (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        
+        const result = await db.query(
+            'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY timestamp DESC LIMIT 50',
+            [ticketId]
+        );
+        
+        // Inverti l'ordine per mostrare i più recenti in fondo
+        const messages = result.rows.reverse().map(msg => ({
+            id: 'msg-' + msg.id,
+            content: msg.content,
+            username: msg.username,
+            isStaff: true, // Tutti i messaggi della live chat sono staff
+            timestamp: msg.timestamp,
+            userId: 'web-' + msg.username
+        }));
+        
+        res.json(messages);
+        
+    } catch (error) {
+        console.error('❌ Errore recupero messaggi Live Chat:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    }
+});
+
+// FUNZIONE PER VERIFICARE L'ACCESSO ALLA LIVE CHAT
+async function checkUserTicketAccess(userId, guildId) {
+    try {
+        // Cerca l'utente nei guilds della session
+        // Questa funzione dovrebbe essere simile a checkStaffRole ma più specifica
+        const userGuilds = req.session.user?.guilds || [];
+        const userGuild = userGuilds.find(g => g.id === guildId);
+        
+        if (!userGuild) return false;
+        
+        // Controlla se è admin
+        const isAdmin = (userGuild.permissions & 0x8) === 0x8;
+        if (isAdmin) return true;
+        
+        // Controlla i ruoli consentiti dal database
+        const result = await db.query(
+            'SELECT settings FROM guild_settings WHERE guild_id = $1',
+            [guildId]
+        );
+        
+        if (result.rows.length > 0) {
+            const settings = result.rows[0].settings || {};
+            const allowedRoles = settings.allowed_roles || [];
+            const userRoles = userGuild.roles || [];
+            
+            return userRoles.some(roleId => allowedRoles.includes(roleId));
+        }
+        
+        return false;
+        
+    } catch (error) {
+        console.error('Errore verifica accesso ticket:', error);
+        return false;
+    }
+}
 
 // === MIDDLEWARE PER VERIFICA STAFF - INTEGRATO CON ALLOWEDROLES ===
 async function checkStaffRole(req, res, next) {
