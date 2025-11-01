@@ -147,7 +147,7 @@ async function createTicket(interaction, optionValue) {
             'INSERT INTO tickets (guild_id, user_id, channel_id, ticket_type, status, channel_name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
             [guild.id, user.id, ticketChannel.id, selectedOption.name, 'open', ticketChannel.name]
         );
-        const ticketId = ticketResult.rows[0].id;
+        let ticketId = ticketResult.rows[0].id;
 
         // Embed benvenuto
         const welcomeEmbed = new EmbedBuilder()
