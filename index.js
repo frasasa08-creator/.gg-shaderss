@@ -2459,7 +2459,7 @@ app.post('/ticket/:id/send', async (req, res) => {
 // AVVIO SERVER + WEBSOCKET
 // ═══════════════════════════════════════════════════════════
 
-const server = app.listen(PORT, () => {
+/*const server = app.listen(PORT, () => {
     console.log("Server web su http://localhost:" + PORT);
 });
 
@@ -2467,7 +2467,7 @@ server.on('upgrade', (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
     });
-});
+});*/
 
 // === ROTTA DEBUG PER VERIFICARE I FILE ===
 app.get('/debug-transcripts-files', (req, res) => {
@@ -2999,7 +2999,7 @@ app.get('/', (req, res) => {
 });
 
 // Avvia server web
-/*let server;
+let server;
 try {
     const server = app.listen(PORT, () => {
     console.log("Server web su http://localhost:" + PORT);
@@ -3010,7 +3010,7 @@ try {
         wss.handleUpgrade(request, socket, head, (ws) => {
             wss.emit('connection', ws, request);
         });
-    });*/
+    });
         
         // Crea la cartella transcripts all'avvio
         const transcriptDir = path.join(__dirname, 'transcripts');
