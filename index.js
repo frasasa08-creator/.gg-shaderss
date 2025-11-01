@@ -1049,7 +1049,7 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
       async function loadMessages() {
           try {
               console.log('🔄 Caricamento messaggi per ticket:', ticketId);
-              const response = await fetch(`/api/ticket/${ticketId}/messages`);
+              const response = await fetch('/api/ticket/' + ticketId + '/messages');
               
               if (!response.ok) {
                   throw new Error(`Errore HTTP: ${response.status}`);
