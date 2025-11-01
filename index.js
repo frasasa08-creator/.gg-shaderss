@@ -478,7 +478,7 @@ function initChat(ticketId) {
         if (!isActive || !ticketId) return;
         
         try {
-            const response = await fetch(`/api/ticket/${ticketId}/messages`);
+            const response = await fetch('/api/ticket/' + currentTicketId + '/messages');
             const messages = await response.json();
             aggiornaInterfacciaChat(messages);
         } catch (error) {
