@@ -702,7 +702,7 @@ app.get('/chat/:ticketId', async (req, res) => {
                     if (!currentTicketId) return;
                     
                     try {
-                        const response = await fetch(`/api/ticket/${currentTicketId}/messages`);
+                        const response = await fetch('/api/ticket/' + currentTicketId + '/messages');
                         const messages = await response.json();
                         displayMessages(messages);
                     } catch (error) {
