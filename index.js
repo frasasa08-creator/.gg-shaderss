@@ -430,7 +430,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
 });
 
 // Frontend - Aggiorna la chat ogni 2 secondi
-function aggiornaChat() {
+/*function aggiornaChat() {
     fetch(`/api/ticket/${ticketId}/messages`)
         .then(response => response.json())
         .then(messages => {
@@ -440,7 +440,7 @@ function aggiornaChat() {
 }
 
 // Aggiorna ogni 2 secondi
-setInterval(aggiornaChat, 2000);
+setInterval(aggiornaChat, 2000);*/
 
 
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
