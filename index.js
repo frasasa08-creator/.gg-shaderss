@@ -665,7 +665,24 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
+let retryCount = 0;
+const maxRetries = 3;
 
+async function loginWithRetry() {
+    try {
+        await authenticateWithDiscord();
+        retryCount = 0;
+    } catch (error) {
+        if (error.oauthError?.statusCode === 429 && retryCount < maxRetries) {
+            retryCount++;
+            const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+            console.log(`⏳ Rate limit, riprovo tra ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return loginWithRetry();
+        }
+        throw error;
+    }
+}
 
 // Nuova route per la chat live
 /*app.get('/chat/:ticketId', async (req, res) => {
