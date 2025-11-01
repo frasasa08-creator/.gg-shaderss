@@ -2,7 +2,16 @@
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');
-const Ticket = require('./models/Ticket');
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+});
 const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
@@ -2813,7 +2822,6 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Inizializza database
 async function initDatabase() {
     try {
         await db.query(`
@@ -2844,12 +2852,22 @@ async function initDatabase() {
                 close_reason TEXT
             )
         `);
+    
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY,
+                ticket_id VARCHAR(50) NOT NULL,
+                username VARCHAR(100) NOT NULL,
+                content TEXT NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
         console.log('✅ Database inizializzato correttamente');
     } catch (error) {
         console.error('❌ Errore inizializzazione database:', error);
     }
 }
-
 let isDeploying = false;
 async function deployCommands() {
   if (process.env.REGISTER_COMMANDS !== 'true' || isDeploying) {
