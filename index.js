@@ -1671,6 +1671,26 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             [guildId, 'open']
         );
 
+        // DEBUG DETTAGLIATO
+        console.log('📊 DEBUG TRANSCRIPT PAGE:');
+        console.log('- Guild ID:', guildId);
+        console.log('- Ticket aperti trovati:', openTickets.rows.length);
+        console.log('- Ticket chiusi trovati:', closedTickets.rows.length);
+        
+        if (openTickets.rows.length > 0) {
+            console.log('📖 Ticket aperti:');
+            openTickets.rows.forEach(ticket => {
+                console.log(`   ID: ${ticket.id}, User: ${ticket.user_id}, Type: ${ticket.ticket_type}, Channel: ${ticket.channel_id}`);
+            });
+        }
+        
+        if (closedTickets.rows.length > 0) {
+            console.log('📖 Ticket chiusi:');
+            closedTickets.rows.forEach(ticket => {
+                console.log(`   ID: ${ticket.id}, User: ${ticket.user_id}, Type: ${ticket.ticket_type}`);
+            });
+        }
+
         // Transcript disponibili
         let availableTranscripts = [];
         if (fs.existsSync(transcriptDir)) {
