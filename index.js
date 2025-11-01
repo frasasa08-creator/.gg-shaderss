@@ -442,7 +442,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
     }
 });
 
-app.get('/api/ticket/:ticketId/messages', async (req, res) => {
+/*app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     try {
         const { ticketId } = req.params;
         
@@ -835,7 +835,7 @@ app.get('/transcripts/:ticketId', async (req, res) => {
         console.error('Errore chat live:', error);
         res.status(500).send('Errore interno del server');
     }
-});
+});*/
 
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
 app.get('/transcript/:identifier', (req, res) => {
@@ -1017,7 +1017,7 @@ app.get('/transcript/:identifier', (req, res) => {
 </body>
 </html>
     `);
-});*/
+});
 
 // === MIDDLEWARE PER VERIFICA STAFF - INTEGRATO CON ALLOWEDROLES ===
 async function checkStaffRole(req, res, next) {
