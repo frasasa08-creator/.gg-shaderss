@@ -294,35 +294,28 @@ app.use((err, req, res, next) => {
 });
 
 app.get('/auth/failure', (req, res) => {
-    console.log('❌ Autenticazione fallita:', error);
-    const error = req.session.messages?.[0] || 'Errore di autenticazione';
-    const authError = req.query.error || 'Errore sconosciuto';
-    const errorDescription = req.query.error_description || 'Nessuna descrizione';
+    // ✅ CORRETTO - usa un nome diverso per la variabile
+    const authError = req.session.messages?.[0] || 'Errore di autenticazione';
+    console.log('❌ Autenticazione fallita:', authError);
     
     res.send(`
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Autenticazione Fallita</title>
+            <title>Errore di Autenticazione</title>
             <style>
-                body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
-                .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
-                       border-radius: 8px; text-decoration: none; margin: 10px; }
-                .error-details { background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
+                body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
+                h1 { color: #ff6b6b; }
+                .error { background: #ffe6e6; padding: 20px; border-radius: 8px; margin: 20px 0; }
             </style>
         </head>
         <body>
-            <h1>❌ Autenticazione Fallita</h1>
-            <p>Impossibile accedere con Discord.</p>
-            
-            <div class="error-details">
-                <strong>Dettagli errore:</strong><br>
-                Codice: ${authError}<br>
-                Descrizione: ${errorDescription}
+            <h1>❌ Errore di Autenticazione</h1>
+            <div class="error">
+                <p><strong>${authError}</strong></p>
+                <p>Se l'errore persiste, riprova tra 15-30 minuti.</p>
             </div>
-            
-            <a href="/auth/discord" class="btn">Riprova Login</a>
-            <a href="/" class="btn">Torna alla Home</a>
+            <a href="/">Torna alla Home</a>
         </body>
         </html>
     `);
