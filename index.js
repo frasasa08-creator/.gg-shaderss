@@ -479,10 +479,9 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
         
         // Recupera le informazioni del ticket - CORREZIONE: usa CAST per convertire tipi
         const ticketResult = await db.query(
-            'SELECT * FROM tickets WHERE id = $1::integer OR channel_id = $1',
-            [ticketId]
-        );
-        
+        'SELECT * FROM tickets WHERE id::text = $1 OR channel_id = $1',
+        [ticketId]
+    );
         if (ticketResult.rows.length === 0) {
             return res.status(404).send(`
                 <!DOCTYPE html>
@@ -531,9 +530,9 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
 
         // Recupera i messaggi esistenti - CORREZIONE: usa CAST anche qui
         const messagesResult = await db.query(
-            'SELECT * FROM messages WHERE ticket_id = $1::integer ORDER BY timestamp ASC',
-            [ticket.id]
-        );
+        'SELECT * FROM messages WHERE ticket_id::text = $1 ORDER BY timestamp ASC',
+        [ticket.id.toString()]
+    );
 
         const messages = messagesResult.rows;
 
