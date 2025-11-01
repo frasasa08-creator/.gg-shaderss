@@ -2350,13 +2350,13 @@ app.get('/ticket/:id', async (req, res) => {
         function addMessage(msg) {
             const div = document.createElement('div');
             div.className = 'message';
-            div.innerHTML = \`
+            div.innerHTML = `
                 <div class="message-header">
-                    <strong>\${msg.username}</strong>
-                    <span class="timestamp">\${new Date(msg.created_at || msg.timestamp).toLocaleTimeString()}</span>
+                    <strong>${msg.username}</strong>
+                    <span class="timestamp">${new Date(msg.created_at || msg.timestamp).toLocaleTimeString()}</span>
                 </div>
-                <div class="message-content">\${msg.content.replace(/\\*\\*/g, '')}</div>
-            \`;
+                <div class="message-content">${msg.content.replace(/\\*\\*/g, '')}</div>
+            `;
             messagesDiv.appendChild(div);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
