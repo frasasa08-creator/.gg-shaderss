@@ -1,6 +1,7 @@
 // index.js
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+const { WebSocketServer } = require('ws');
 const fs = require('fs');
 const { Pool } = require('pg');
 
@@ -2219,6 +2220,235 @@ app.delete('/transcript/:filename', checkStaffRole, async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════
+// CHAT WEB IN TEMPO REALE PER TICKET (stile Discord)
+// ═══════════════════════════════════════════════════════════
+
+// WebSocket Server
+const wss = new WebSocketServer({ noServer: true });
+const ticketClients = new Map(); // ticketId → Set<WebSocket>
+
+// Gestione connessione WebSocket
+wss.on('connection', (ws, req) => {
+    const url = new URL(req.headers.origin + req.url);
+    const ticketId = url.searchParams.get('ticketId');
+    if (!ticketId) return ws.close();
+
+    if (!ticketClients.has(ticketId)) ticketClients.set(ticketId, new Set());
+    ticketClients.get(ticketId).add(ws);
+
+    ws.on('close', () => {
+        const clients = ticketClients.get(ticketId);
+        if (clients) {
+            clients.delete(ws);
+            if (clients.size === 0) ticketClients.delete(ticketId);
+        }
+    });
+});
+
+// Funzione per inviare aggiornamento live
+function broadcastTicketMessage(ticketId, message) {
+    const clients = ticketClients.get(ticketId);
+    if (!clients) return;
+    const payload = JSON.stringify({ type: 'new_message', message });
+    clients.forEach(client => {
+        if (client.readyState === client.OPEN) {
+            client.send(payload);
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+// ROUTE: /ticket/:id → CHAT WEB
+// ═══════════════════════════════════════════════════════════
+
+app.get('/ticket/:id', async (req, res) => {
+    try {
+        if (!req.session.user) return res.redirect('/login');
+
+        const ticketId = req.params.id;
+        const result = await db.query(
+            'SELECT * FROM tickets WHERE id = $1 AND guild_id = $2',
+            [ticketId, req.session.user.guild_id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.send('<h1>Ticket non trovato</h1>');
+        }
+
+        const ticket = result.rows[0];
+
+        // Controllo permessi staff
+        const settingsRes = await db.query(
+            'SELECT settings FROM guild_settings WHERE guild_id = $1',
+            [req.session.user.guild_id]
+        );
+        const allowedRoles = settingsRes.rows[0]?.settings?.allowed_roles || [];
+        const member = await client.guilds.cache.get(req.session.user.guild_id)?.members.fetch(req.session.user.id);
+        const isStaff = member?.permissions.has('Administrator') || 
+                        allowedRoles.some(id => member?.roles.cache.has(id));
+
+        if (!isStaff) {
+            return res.status(403).send('<h1>Accesso negato</h1>');
+        }
+
+        // HTML + CSS + JS inline
+        res.send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Ticket #${ticket.id} - Chat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #36393f; color: #dcddde; }
+        .chat-container { max-width: 800px; margin: 20px auto; background: #2f3136; border-radius: 8px; overflow: hidden; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        .chat-header { padding: 15px; background: #292b2f; border-bottom: 1px solid #202225; }
+        .chat-header h3 { margin: 0; font-size: 1.2rem; }
+        .chat-header p { margin-top: 5px; font-size: 0.9rem; color: #b9bbbe; }
+        .chat-messages { height: 60vh; overflow-y: auto; padding: 15px; }
+        .message { margin-bottom: 15px; }
+        .message-header { display: flex; justify-content: space-between; font-size: 0.8rem; color: #72767d; margin-bottom: 3px; }
+        .message-content { word-wrap: break-word; }
+        .chat-input { display: flex; padding: 15px; background: #40444b; gap: 10px; }
+        #messageInput { flex: 1; padding: 10px; background: #36393f; border: none; border-radius: 5px; color: white; resize: none; }
+        #sendBtn { padding: 0 15px; background: #5865f2; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #sendBtn:hover { background: #4752c4; }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h3>Ticket #${ticket.id} - ${ticket.category}</h3>
+            <p>Utente: <strong>${ticket.username}</strong></p>
+        </div>
+        <div id="messages" class="chat-messages"></div>
+        <div class="chat-input">
+            <textarea id="messageInput" placeholder="Scrivi un messaggio... (premi Invio)"></textarea>
+            <button id="sendBtn">Invia</button>
+        </div>
+    </div>
+
+    <script>
+        const ticketId = '${ticket.id}';
+        const ws = new WebSocket('ws://' + location.host + '/ws?ticketId=' + ticketId);
+        const messagesDiv = document.getElementById('messages');
+        const input = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Carica messaggi passati
+        fetch('/ticket/${ticketId}/messages')
+            .then(r => r.json())
+            .then(msgs => msgs.forEach(addMessage));
+
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'new_message') addMessage(data.message);
+        };
+
+        function addMessage(msg) {
+            const div = document.createElement('div');
+            div.className = 'message';
+            div.innerHTML = \`
+                <div class="message-header">
+                    <strong>\${msg.username}</strong>
+                    <span class="timestamp">\${new Date(msg.created_at || msg.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div class="message-content">\${msg.content.replace(/\\*\\*/g, '')}</div>
+            \`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = input.value.trim();
+            if (!text) return;
+            await fetch('/ticket/${ticketId}/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+            input.value = '';
+        }
+
+        sendBtn.onclick = sendMessage;
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
+        `);
+    } catch (error) {
+        console.error('Errore pagina ticket:', error);
+        res.status(500).send('Errore server');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// API: carica messaggi
+// ═══════════════════════════════════════════════════════════
+
+app.get('/ticket/:id/messages', async (req, res) => {
+    try {
+        const result = await db.query(
+            'SELECT * FROM ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC',
+            [req.params.id]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Errore' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// API: invia messaggio dal web
+// ═══════════════════════════════════════════════════════════
+
+app.post('/ticket/:id/send', async (req, res) => {
+    try {
+        const { message } = req.body;
+        const ticketId = req.params.id;
+        if (!req.session.user || !message?.trim()) return res.status(400).json({ error: 'Bad request' });
+
+        const ticketRes = await db.query(
+            'SELECT channel_id FROM tickets WHERE id = $1',
+            [ticketId]
+        );
+        if (ticketRes.rows.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
+
+        const channel = client.channels.cache.get(ticketRes.rows[0].channel_id);
+        if (!channel) return res.status(410).json({ error: 'Canale non trovato' });
+
+        const formatted = \`**[STAFF]: ${message.trim()}**\`;
+        await channel.send(formatted);
+
+        const staffUser = await client.users.fetch(req.session.user.id);
+        await db.query(
+            'INSERT INTO ticket_messages (ticket_id, user_id, username, content) VALUES ($1, $2, $3, $4)',
+            [ticketId, req.session.user.id, staffUser.tag, formatted]
+        );
+
+        const msgData = {
+            id: Date.now(),
+            user_id: req.session.user.id,
+            username: staffUser.tag,
+            content: formatted,
+            timestamp: new Date().toISOString()
+        };
+
+        broadcastTicketMessage(ticketId, msgData);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Errore invio messaggio web:', error);
+        res.status(500).json({ error: 'Errore invio' });
+    }
+});
+
 // === ROTTA DEBUG PER VERIFICARE I FILE ===
 app.get('/debug-transcripts-files', (req, res) => {
     const transcriptDir = path.join(__dirname, 'transcripts');
@@ -2751,9 +2981,16 @@ app.get('/', (req, res) => {
 // Avvia server web
 let server;
 try {
-    server = app.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Server web attivo sulla porta ${PORT}`);
-        console.log(`🌐 Status page: https://gg-shaderss.onrender.com`);
+    const server = app.listen(PORT, () => {
+    console.log(\`Server web su http://localhost:${PORT}\`);
+    });
+    
+    // WebSocket su stesso server
+    server.on('upgrade', (request, socket, head) => {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+        });
+    });
         
         // Crea la cartella transcripts all'avvio
         const transcriptDir = path.join(__dirname, 'transcripts');
