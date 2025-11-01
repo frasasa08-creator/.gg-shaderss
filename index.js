@@ -408,11 +408,6 @@ app.post('/api/ticket/send-message', async (req, res) => {
 
         console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}`);
 
-        // 1. Cerca il ticket (usa la tua tabella tickets esistente)
-        const messageResult = await db.query(
-        'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
-        [ticketId, username, message]
-    );
         
         if (ticketResult.rows.length === 0) {
             return res.status(404).json({ error: 'Ticket non trovato' });
@@ -423,9 +418,9 @@ app.post('/api/ticket/send-message', async (req, res) => {
 
         // 2. Salva il messaggio nella tabella messages
         const messageResult = await db.query(
-            'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
-            [ticket.id, username, message]
-        );
+        'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
+        [ticketId, username, message]
+    );
 
         const savedMessage = messageResult.rows[0];
 
