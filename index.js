@@ -1630,25 +1630,93 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     }
 });
 
+// === ROTTA PER CREARE IMPOSTAZIONI PER SERVER MANCANTI ===
+app.get('/fix-server-settings/:guildId', checkStaffRole, async (req, res) => {
+    try {
+        const guildId = req.params.guildId;
+        
+        // Verifica se le impostazioni esistono già
+        const existing = await db.query(
+            'SELECT * FROM guild_settings WHERE guild_id = $1',
+            [guildId]
+        );
+
+        if (existing.rows.length > 0) {
+            return res.json({ 
+                success: true, 
+                message: 'Impostazioni già esistenti',
+                settings: existing.rows[0] 
+            });
+        }
+
+        // Crea impostazioni di default
+        const defaultSettings = {
+            allowed_roles: [],
+            ticket_options: [
+                {
+                    name: "Supporto Generale",
+                    emoji: "🎫",
+                    value: "ticket_support",
+                    category: "Supporto"
+                }
+            ]
+        };
+
+        await db.query(`
+            INSERT INTO guild_settings (guild_id, settings) 
+            VALUES ($1, $2)
+        `, [guildId, defaultSettings]);
+
+        res.json({ 
+            success: true, 
+            message: 'Impostazioni create con successo',
+            guildId: guildId
+        });
+
+    } catch (error) {
+        console.error('❌ Errore creazione impostazioni:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // === ROTTA COMPLETA PER GESTIONE TICKET ===
 app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
         const guildId = req.params.guildId;
-        const userGuilds = req.user.guilds || [];
-        
-        // Verifica che l'utente abbia accesso a questo server specifico
-        const userGuild = userGuilds.find(g => g.id === guildId);
-        if (!userGuild) {
-            return res.status(403).send('Accesso negato a questo server');
-        }
+        console.log('🔍 Caricamento pagina transcript per guild:', guildId);
 
         // Verifica che il bot sia nel server
         const botGuild = client.guilds.cache.get(guildId);
         if (!botGuild) {
-            return res.status(404).send('Bot non presente in questo server');
+            console.log('❌ Bot non presente nel server:', guildId);
+            console.log('📋 Server disponibili:', Array.from(client.guilds.cache.keys()));
+            return res.status(404).send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Bot Non Presente</title>
+                    <style>/* ... stile ... */</style>
+                </head>
+                <body>
+                    <h1>❌ Bot Non Presente</h1>
+                    <p>Il bot non è presente nel server con ID: <strong>${guildId}</strong></p>
+                    <p>Server disponibili: ${Array.from(client.guilds.cache.keys()).join(', ')}</p>
+                    <div>
+                        <a href="/transcripts" class="btn">← Torna alla selezione server</a>
+                    </div>
+                </body>
+                </html>
+            `);
         }
 
-        // Verifica i permessi
+        const userGuilds = req.user.guilds || [];
+        const userGuild = userGuilds.find(g => g.id === guildId);
+        
+        if (!userGuild) {
+            return res.status(403).send('Accesso negato a questo server');
+        }
+
+        // 🔥 CORREZIONE: Se non ci sono impostazioni, permetti l'accesso agli admin
         const result = await db.query(
             'SELECT settings FROM guild_settings WHERE guild_id = $1',
             [guildId]
@@ -1662,13 +1730,23 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             const hasAllowedRole = userRoles.some(roleId => allowedRoles.includes(roleId));
             const isAdmin = (userGuild.permissions & 0x8) === 0x8;
             hasAccess = hasAllowedRole || isAdmin;
+            
+            console.log('🔍 Controllo permessi con impostazioni:', {
+                hasAllowedRole,
+                isAdmin,
+                allowedRoles,
+                userRoles
+            });
         } else {
+            // Se non ci sono impostazioni, solo admin può accedere
             hasAccess = (userGuild.permissions & 0x8) === 0x8;
+            console.log('ℹ️ Nessuna impostazione, solo admin:', hasAccess);
         }
 
         if (!hasAccess) {
             return res.status(403).send('Accesso negato a questo server');
         }
+
 
         // RECUPERA I DATI
         const transcriptDir = path.join(__dirname, 'transcripts');
