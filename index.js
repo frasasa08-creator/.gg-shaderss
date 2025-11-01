@@ -85,7 +85,6 @@ function extractServerIdFromFilename(filename) {
     console.log(`❌ Nessun Server ID trovato in: ${filename}`);
     return null;
 }
-
 // === SERVER EXPRESS PER RENDER ===
 const express = require('express');
 const app = express();
@@ -1548,7 +1547,7 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(404).send('Bot non presente in questo server');
         }
 
-        // Verifica i permessi
+        // VERIFICA I PERMESSI - CORREGGI QUESTA PARTE
         const result = await db.query(
             'SELECT settings FROM guild_settings WHERE guild_id = $1',
             [guildId]
@@ -1570,16 +1569,16 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             return res.status(403).send('Accesso negato a questo server');
         }
 
-        // RECUPERA I DATI
+        // RECUPERA I DATI - CORREGGI LE QUERY
         const transcriptDir = path.join(__dirname, 'transcripts');
         
-        // Ticket chiusi (transcript)
+        // Ticket chiusi (transcript) - CORREGGI QUESTA QUERY
         const closedTickets = await db.query(
             'SELECT * FROM tickets WHERE guild_id = $1 AND status = $2 ORDER BY closed_at DESC LIMIT 50',
             [guildId, 'closed']
         );
 
-        // Ticket aperti
+        // Ticket aperti - CORREGGI QUESTA QUERY
         const openTickets = await db.query(
             'SELECT * FROM tickets WHERE guild_id = $1 AND status = $2 ORDER BY created_at DESC',
             [guildId, 'open']
@@ -1604,6 +1603,41 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
                 };
             }).sort((a, b) => new Date(b.date) - new Date(a.date));
         }
+              // DEBUG - VERIFICA I DATI
+        console.log('📊 DEBUG DATI TRANSCRIPT:');
+        console.log('- Guild ID:', guildId);
+        console.log('- Ticket aperti:', openTickets.rows.length);
+        console.log('- Ticket chiusi:', closedTickets.rows.length);
+        console.log('- Transcript files:', availableTranscripts.length);
+        console.log('- Transcript files trovati:', availableTranscripts.map(t => t.name));
+
+        // Se non ci sono dati, mostra un messaggio
+        if (openTickets.rows.length === 0 && closedTickets.rows.length === 0 && availableTranscripts.length === 0) {
+            return res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Nessun Ticket - ${botGuild.name}</title>
+                    <style>
+                        body { background: #1e1f23; color: white; font-family: sans-serif; padding: 50px; text-align: center; }
+                        .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin: 10px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>📭 Nessun Ticket Trovato</h1>
+                    <p>Non ci sono ticket aperti, chiusi o transcript per il server <strong>${botGuild.name}</strong>.</p>
+                    <p>I ticket appariranno qui quando verranno creati e chiusi nel server Discord.</p>
+                    <div>
+                        <a href="/transcripts" class="btn">← Torna alla selezione server</a>
+                        <a href="/" class="btn">🏠 Home</a>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+
+        // HTML per la pagina...
+
 
         // HTML per la pagina
         const html = `
