@@ -409,7 +409,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
 
         console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}`);
 
-        // 1. Cerca il ticket (usa la tua tabella tickets esistente)
+        // 1. Cerca il ticket
         const ticketResult = await db.query(
             'SELECT * FROM tickets WHERE channel_id = $1 OR id::text = $1',
             [ticketId]
@@ -421,16 +421,16 @@ app.post('/api/ticket/send-message', async (req, res) => {
 
         const ticket = ticketResult.rows[0];
 
-        // 2. Salva il messaggio nella NUOVA tabella messages
+        // 2. Salva il messaggio
         await db.query(
             'INSERT INTO messages (ticket_id, username, content) VALUES ($1, $2, $3)',
             [ticketId, username, message]
         );
 
-        // 3. Invia su Discord
+        // 3. Invia su Discord - SOLO IL MESSAGGIO, SENZA NOME
         const channel = client.channels.cache.get(ticket.channel_id);
         if (channel) {
-            await channel.send(`**${username}:** ${message}`);
+            await channel.send(message); // ✅ SOLO MESSAGGIO
             console.log('✅ Messaggio inviato su Discord');
         }
 
@@ -459,7 +459,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
-/*app.get('/transcripts/:ticketId', async (req, res) => {
+app.get('/transcripts/:ticketId', async (req, res) => {
     try {
         const ticket = await Ticket.findOne({ ticketId: req.params.ticketId });
         if (!ticket) {
