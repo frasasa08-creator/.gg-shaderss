@@ -406,34 +406,38 @@ app.post('/api/ticket/send-message', async (req, res) => {
         const { ticketId, message, channelId } = req.body;
         const username = req.user.username;
 
-        console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}`);
+        console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}: ${message}`);
 
         // 1. Cerca il ticket
-        const ticketResult = await db.query(
+        const ticketQuery = await db.query(
             'SELECT * FROM tickets WHERE id::text = $1 OR channel_id = $1',
             [ticketId]
         );
-      
-        if (ticketResult.rows.length === 0) {
+        
+        if (ticketQuery.rows.length === 0) {
+            console.log('❌ Ticket non trovato:', ticketId);
             return res.status(404).json({ error: 'Ticket non trovato' });
         }
 
-        const ticket = ticketResult.rows[0];
+        const ticket = ticketQuery.rows[0];
         const targetChannelId = channelId || ticket.channel_id;
 
         // 2. Salva il messaggio nella tabella messages
-        const messageInsertResult = await db.query(
+        const messageQuery = await db.query(
             'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
-            [ticketId, username, message]  // ✅ usa ticketId (stringa) invece di ticket.id (integer)
+            [ticketId, username, message]
         );
-        const savedMessage = insertResult.rows[0];
+
+        const savedMessage = messageQuery.rows[0];
 
         // 3. Invia su Discord
         const channel = client.channels.cache.get(targetChannelId);
         if (channel) {
-            const discordMessage = `<:discotoolsxyzicon18:1434231459702509758> **[STAFF - ${username}]**: ${message}`;
+            const discordMessage = `**[STAFF - ${username}]**: ${message}`;
             await channel.send(discordMessage);
-            console.log('✅ Messaggio inviato su Discord');
+            console.log('✅ Messaggio inviato su Discord nel canale:', targetChannelId);
+        } else {
+            console.log('⚠️ Canale Discord non trovato:', targetChannelId);
         }
 
         res.json({ 
@@ -443,7 +447,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Errore invio messaggio:', error);
-        res.status(500).json({ error: 'Errore interno' });
+        res.status(500).json({ error: 'Errore interno del server' });
     }
 });
 
