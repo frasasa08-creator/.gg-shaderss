@@ -226,6 +226,14 @@ async function showCloseTicketModal(interaction) {
  */
 async function closeTicketWithReason(interaction) {
     try {
+        console.log('=== INIZIO CHIUSURA TICKET ===');
+        console.log('📝 Dati interaction:');
+        console.log('   - Channel:', interaction.channel?.name);
+        console.log('   - User:', interaction.user?.username);
+        console.log('   - Guild:', interaction.guild?.name);
+        
+        await interaction.deferReply({ flags: 64 });
+    try {
         await interaction.deferReply({ flags: 64 });
         const reason = interaction.fields.getTextInputValue('close_reason');
         const channel = interaction.channel;
@@ -295,12 +303,51 @@ async function closeTicketWithReason(interaction) {
         const uniqueName = `ticket-${ticketType}-${username}-${timestamp}-${guildId}`;
         const transcriptPath = path.join(transcriptDir, `${uniqueName}.html`);
         
+        // === SALVA IL FILE CON VERIFICA ===
+        console.log('🔍 Informazioni transcript:');
+        console.log('   - Tipo:', typeof transcript.attachment);
+        console.log('   - È Buffer?', Buffer.isBuffer(transcript.attachment));
+        console.log('   - È stringa?', typeof transcript.attachment === 'string');
+        console.log('   - Lunghezza:', transcript.attachment?.length);
+        
+        // Converti in Buffer se necessario
+        let fileContent;
+        if (Buffer.isBuffer(transcript.attachment)) {
+            fileContent = transcript.attachment;
+        } else if (typeof transcript.attachment === 'string') {
+            fileContent = Buffer.from(transcript.attachment, 'utf-8');
+        } else {
+            console.log('❌ Tipo di attachment non supportato:', typeof transcript.attachment);
+            // Crea un contenuto di fallback
+            fileContent = Buffer.from(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Transcript Error</title></head>
+                <body>
+                    <h1>Errore Generazione Transcript</h1>
+                    <p>Ticket: ${ticket.id}</p>
+                    <p>Canale: ${channel.name}</p>
+                    <p>Data: ${new Date().toISOString()}</p>
+                </body>
+                </html>
+            `, 'utf-8');
+        }
+        
         // Salva il file
-        fs.writeFileSync(transcriptPath, transcript.attachment);
-        console.log(`✅ Transcript salvato con successo:`);
-        console.log(`   - Percorso: ${transcriptPath}`);
-        console.log(`   - Nome file: ${uniqueName}.html`);
-        console.log(`   - Dimensione: ${transcript.attachment.length} bytes`);
+        try {
+            fs.writeFileSync(transcriptPath, fileContent);
+            console.log(`✅ Transcript salvato: ${transcriptPath}`);
+            
+            // Verifica immediata
+            if (fs.existsSync(transcriptPath)) {
+                const stats = fs.statSync(transcriptPath);
+                console.log(`✅ Verificato: ${stats.size} bytes`);
+            } else {
+                console.log(`❌ ERRORE CRITICO: File non creato!`);
+            }
+        } catch (error) {
+            console.log(`❌ Errore salvataggio:`, error.message);
+        }
 
         // Verifica che il file sia stato creato
         if (fs.existsSync(transcriptPath)) {
@@ -511,10 +558,15 @@ c&&c.addEventListener("click",()=>{navigator.clipboard.writeText(i),contextMenu.
 </body>
 </html>`;
 
+        console.log('📄 Transcript generato:');
+        console.log('   - Lunghezza HTML:', htmlContent.length);
+        console.log('   - Tipo attachment:', typeof Buffer.from(htmlContent, 'utf-8'));
+        console.log('   - È Buffer?', Buffer.isBuffer(Buffer.from(htmlContent, 'utf-8')));
+        
         return {
             attachment: Buffer.from(htmlContent, 'utf-8'),
             name: `${channel.name}.html`
-        };
+        }
     } catch (error) {
         console.error('Errore generazione transcript:', error);
         return generateOblivionBotFallbackTranscript(channel, ticketId);
