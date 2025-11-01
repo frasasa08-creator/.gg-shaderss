@@ -646,7 +646,7 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
         console.error('❌ Errore recupero messaggi:', error);
         res.status(500).json({ error: 'Errore interno del server' });
     }
-});*/
+});
 
 
 
