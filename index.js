@@ -470,16 +470,16 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
-// === NUOVA ROTTA PER LA CHAT LIVE ===
+// === NUOVA ROTTA PER LA CHAT LIVE - VERSIONE CORRETTA ===
 app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     try {
         const { ticketId } = req.params;
         
         console.log(`💬 Apertura chat live per ticket: ${ticketId}`);
         
-        // Recupera le informazioni del ticket
+        // Recupera le informazioni del ticket - CORREZIONE: usa CAST per convertire tipi
         const ticketResult = await db.query(
-            'SELECT * FROM tickets WHERE id = $1 OR channel_id = $1',
+            'SELECT * FROM tickets WHERE id = $1::integer OR channel_id = $1',
             [ticketId]
         );
         
@@ -529,14 +529,15 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             `);
         }
 
-        // Recupera i messaggi esistenti
+        // Recupera i messaggi esistenti - CORREZIONE: usa CAST anche qui
         const messagesResult = await db.query(
-            'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY timestamp ASC',
+            'SELECT * FROM messages WHERE ticket_id = $1::integer ORDER BY timestamp ASC',
             [ticket.id]
         );
 
         const messages = messagesResult.rows;
 
+        // ... il resto del codice HTML rimane uguale ...
         // HTML per la chat live con interfaccia Discord-like
         res.send(`
 <!DOCTYPE html>
