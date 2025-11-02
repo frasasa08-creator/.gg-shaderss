@@ -19,12 +19,7 @@
     "path": "^0.12.7",
     "pg": "^8.11.3",
     "pm2": "^6.0.13",
-    "ws": "^8.14.2",
-    "web-push": "^3.6.7",
-    "svg-captcha": "^1.4.0",
-    "express-rate-limit": "^6.7.0",
-    "redis": "^4.6.7",
-    "winston": "^3.8.2"
+    "ws": "^8.14.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
