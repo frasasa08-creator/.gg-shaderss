@@ -473,6 +473,27 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
+// === API TEMPORANEA PER ELIMINARE DUPLICATI ===
+app.delete('/api/cleanup-duplicates', async (req, res) => {
+    try {
+        const result = await db.query(`
+            DELETE FROM messages 
+            WHERE id NOT IN (
+                SELECT MIN(id) 
+                FROM messages 
+                GROUP BY ticket_id, content, username, DATE(timestamp)
+            )
+        `);
+        
+        console.log(`🧹 Eliminati ${result.rowCount} messaggi duplicati`);
+        res.json({ success: true, deleted: result.rowCount });
+        
+    } catch (error) {
+        console.error('❌ Errore pulizia duplicati:', error);
+        res.status(500).json({ error: 'Errore pulizia' });
+    }
+});
+
 // === NUOVA ROTTA PER LA CHAT LIVE - VERSIONE CORRETTA ===
 app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     try {
