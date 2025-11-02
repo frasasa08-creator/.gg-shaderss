@@ -422,10 +422,10 @@ app.post('/api/ticket/send-message', async (req, res) => {
         const ticket = ticketQuery.rows[0];
         const targetChannelId = channelId || ticket.channel_id;
 
-        // 2. Salva il messaggio nella tabella messages
+        // 2. Salva il messaggio come STAFF
         const messageQuery = await db.query(
-            'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW()) RETURNING *',
-            [ticketId, username, message]
+            'INSERT INTO messages (ticket_id, username, content, is_staff, timestamp) VALUES ($1, $2, $3, $4, NOW()) RETURNING *',
+            [ticketId, username, message, true] // ✅ is_staff = true per messaggi staff
         );
 
         const savedMessage = messageQuery.rows[0];
@@ -893,6 +893,16 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             background: var(--text-muted);
         }
 
+        .user-badge {
+          background: var(--success);
+          color: #000;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+      }
+
         /* Responsive */
         @media (max-width: 768px) {
             .server-sidebar {
@@ -1069,27 +1079,31 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
         }
     }
 
-    // ✅ CORREZIONE 5: Mostra messaggi nell'interfaccia
+    // ✅ CORREZIONE 5: Mostra messaggi nell'interfaccia (STAFF + UTENTE)
     function displayMessages(messages) {
         if (messages.length === 0) {
             messagesContainer.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><h3>Nessun messaggio ancora</h3><p>Inizia la conversazione inviando un messaggio!</p></div>';
             return;
         }
-
+    
         messagesContainer.innerHTML = messages.map(function(msg) {
+            const isStaff = msg.is_staff;
+            const badge = isStaff ? '<span class="staff-badge">STAFF</span>' : '<span class="user-badge">UTENTE</span>';
+            const avatarColor = isStaff ? 'var(--primary)' : 'var(--success)';
+            
             return '<div class="message" data-message-id="' + msg.id + '">' +
-                   '<div class="message-avatar">' + msg.username.charAt(0).toUpperCase() + '</div>' +
+                   '<div class="message-avatar" style="background: ' + avatarColor + '">' + msg.username.charAt(0).toUpperCase() + '</div>' +
                    '<div class="message-content">' +
                    '<div class="message-header">' +
                    '<span class="message-author">' + msg.username + '</span>' +
-                   '<span class="staff-badge">STAFF</span>' +
+                   badge +
                    '<span class="message-timestamp">' + new Date(msg.timestamp).toLocaleString('it-IT') + '</span>' +
                    '</div>' +
                    '<div class="message-text">' + msg.content + '</div>' +
                    '</div>' +
                    '</div>';
         }).join('');
-
+    
         // Scroll automatico all'ultimo messaggio
         scrollToBottom();
     }
@@ -3340,6 +3354,36 @@ module.exports = { client, db };
 client.login(process.env.DISCORD_TOKEN).catch(error => {
     console.error('❌ Errore login bot:', error);
     process.exit(1);
+});
+
+// === EVENTO PER SALVARE MESSAGGI UTENTE ===
+client.on('messageCreate', async (message) => {
+    try {
+        // Ignora messaggi di bot e messaggi non in canali ticket
+        if (message.author.bot) return;
+        if (!message.channel.isTextBased()) return;
+
+        // Cerca se questo canale è un ticket
+        const ticketResult = await db.query(
+            'SELECT * FROM tickets WHERE channel_id = $1 AND status = $2',
+            [message.channel.id, 'open']
+        );
+
+        if (ticketResult.rows.length === 0) return; // Non è un ticket
+
+        const ticket = ticketResult.rows[0];
+        
+        // Salva il messaggio dell'utente
+        await db.query(
+            'INSERT INTO messages (ticket_id, username, content, is_staff, timestamp) VALUES ($1, $2, $3, $4, NOW())',
+            [ticket.id.toString(), message.author.username, message.content, false] // ✅ is_staff = false per utente
+        );
+
+        console.log(`💾 Messaggio utente salvato per ticket ${ticket.id}: ${message.author.username}`);
+
+    } catch (error) {
+        console.error('❌ Errore salvataggio messaggio utente:', error);
+    }
 });
 
 console.log('File index.js caricato completamente');
