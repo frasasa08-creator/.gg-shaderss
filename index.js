@@ -3491,7 +3491,7 @@ async function deployCommands() {
   isDeploying = false;
 }
 
-// Avvio bot
+// Avvio bot - VERSIONE CORRETTA
 client.once('ready', async () => {
     console.log(`✅ Bot online come ${client.user.tag}`);
     console.log(`🏠 Server: ${client.guilds.cache.size} server`);
@@ -3504,12 +3504,10 @@ client.once('ready', async () => {
     await updateBotStatus(client, 'online', 'Avvio completato');
     await startAutoCleanup();
 
-     // Avvia backup automatico
+    // Avvia backup automatico
     setInterval(async () => {
-      await backupUtils.createBackup();
+        await backupUtils.createBackup();
     }, 24 * 60 * 60 * 1000); // Ogni 24 ore
-  });
-    
    
     client.user.setActivity({
         name: `${client.guilds.cache.size} servers | /help`,
