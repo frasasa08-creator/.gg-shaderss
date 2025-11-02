@@ -21,6 +21,16 @@ const { cleanupOldTranscripts } = require('./utils/ticketUtils');
 require('dotenv').config();
 const db = require('./db');
 
+const notificationUtils = require('./utils/notificationUtils');
+const roleUtils = require('./utils/roleUtils');
+const captchaUtils = require('./utils/captchaUtils');
+const backupUtils = require('./utils/backupUtils');
+const i18n = require('./utils/i18n');
+const statsUtils = require('./utils/statsUtils');
+const rateLimit = require('express-rate-limit');
+const redis = require('redis');
+const winston = require('winston');
+
 // Inizializzazione client Discord
 const client = new Client({
     intents: [
@@ -1987,6 +1997,145 @@ app.get('/transcripts', checkStaffRole, async (req, res) => {
     }
 });
 
+// === CONFIGURAZIONE REDIS ===
+let redisClient;
+try {
+  redisClient = redis.createClient({
+    url: process.env.REDIS_URL || 'redis://localhost:6379'
+  });
+  redisClient.on('error', (err) => console.log('Redis Client Error', err));
+  redisClient.connect().then(() => console.log('✅ Redis connesso'));
+} catch (error) {
+  console.log('❌ Redis non disponibile, usando memoria');
+}
+
+// === LOGGER AVANZATO ===
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
+    new winston.transports.Console({
+      format: winston.format.simple()
+    })
+  ]
+});
+
+// === RATE LIMITING ===
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minuti
+  max: 100,
+  message: { error: 'Troppe richieste, riprova più tardi' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 ora
+  max: 5,
+  message: { error: 'Troppi tentativi di login' }
+});
+
+app.use('/api/', apiLimiter);
+app.use('/auth/', authLimiter);
+
+// === INIZIALIZZAZIONE MODULI ===
+async function initializeAllSystems() {
+  console.log('🚀 Inizializzazione sistemi avanzati...');
+  
+  await i18n.initialize();
+  await notificationUtils.initialize();
+  await backupUtils.initialize();
+  
+  console.log('✅ Tutti i sistemi inizializzati');
+}
+
+// === ROTTA STATISTICHE AVANZATE ===
+app.get('/api/stats/:guildId', checkStaffRole, async (req, res) => {
+  try {
+    const stats = await statsUtils.getGuildStats(req.params.guildId);
+    res.json(stats);
+  } catch (error) {
+    logger.error('Errore statistiche:', error);
+    res.status(500).json({ error: 'Errore recupero statistiche' });
+  }
+});
+
+// === API PUBBLICA PER INTEGRAZIONI ===
+app.get('/api/public/ticket/:ticketId', async (req, res) => {
+  try {
+    const { authorization } = req.headers;
+    
+    if (authorization !== `Bearer ${process.env.API_KEY}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const ticket = await db.query(
+      'SELECT * FROM tickets WHERE id::text = $1',
+      [req.params.ticketId]
+    );
+    
+    if (ticket.rows.length === 0) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    
+    res.json(ticket.rows[0]);
+  } catch (error) {
+    logger.error('API Public Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// === SISTEMA DONAZIONI ===
+app.post('/api/donate', async (req, res) => {
+  try {
+    const { amount, ticketId, userId } = req.body;
+    
+    // Log della donazione
+    await db.query(
+      'INSERT INTO donations (user_id, amount, ticket_id, status) VALUES ($1, $2, $3, $4)',
+      [userId, amount, ticketId, 'pending']
+    );
+    
+    // Qui integrerai con Stripe/PayPal
+    res.json({ 
+      success: true, 
+      message: 'Donazione registrata', 
+      payment_url: '/payment/gateway' 
+    });
+  } catch (error) {
+    logger.error('Donation error:', error);
+    res.status(500).json({ error: 'Donation failed' });
+  }
+});
+
+// === GESTIONE LINGUA ===
+app.post('/api/language', async (req, res) => {
+  try {
+    const { lang } = req.body;
+    const userId = req.user.id;
+    
+    await i18n.setUserLanguage(userId, lang);
+    res.json({ success: true, message: 'Lingua cambiata' });
+  } catch (error) {
+    logger.error('Language change error:', error);
+    res.status(500).json({ error: 'Errore cambio lingua' });
+  }
+});
+
+// === SERVICE WORKER E PWA ===
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.join(__dirname, 'public/sw.js'));
+});
+
+app.get('/manifest.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.sendFile(path.join(__dirname, 'public/manifest.json'));
+});
+
 // === ROTTA COMPLETA PER GESTIONE TICKET ===
 app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
@@ -3349,10 +3498,18 @@ client.once('ready', async () => {
    
     await initDatabase();
     await deployCommands();
+    await initializeAllSystems(); 
     await detectPreviousCrash(client);
     await initializeStatusSystem(client);
     await updateBotStatus(client, 'online', 'Avvio completato');
     await startAutoCleanup();
+
+     // Avvia backup automatico
+    setInterval(async () => {
+      await backupUtils.createBackup();
+    }, 24 * 60 * 60 * 1000); // Ogni 24 ore
+  });
+    
    
     client.user.setActivity({
         name: `${client.guilds.cache.size} servers | /help`,
