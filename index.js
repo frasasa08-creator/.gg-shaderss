@@ -3384,11 +3384,31 @@ client.on('messageCreate', async (message) => {
 
         const ticket = ticketResult.rows[0];
         
-        // Salva il messaggio dell'utente
-        await db.query(
-            'INSERT INTO messages (ticket_id, username, content, is_staff, timestamp) VALUES ($1, $2, $3, $4, NOW())',
-            [ticket.id.toString(), message.author.username, message.content, false] // ✅ is_staff = false per utente
+        // ✅ VERIFICA SE IL MESSAGGIO ESISTE GIÀ (prevenzione duplicati)
+        const existingMessage = await db.query(
+            'SELECT * FROM messages WHERE ticket_id = $1 AND content = $2 AND username = $3 AND timestamp > NOW() - INTERVAL \'5 seconds\'',
+            [ticket.id.toString(), message.content, message.author.username]
         );
+
+        if (existingMessage.rows.length > 0) {
+            console.log('⚠️ Messaggio già esistente, salto il salvataggio');
+            return;
+        }
+
+        // Salva il messaggio dell'utente - GESTIONE SICURA
+        try {
+            // Prova con is_staff
+            await db.query(
+                'INSERT INTO messages (ticket_id, username, content, is_staff, timestamp) VALUES ($1, $2, $3, $4, NOW())',
+                [ticket.id.toString(), message.author.username, message.content, false]
+            );
+        } catch (columnError) {
+            // Se is_staff non esiste, salva senza
+            await db.query(
+                'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW())',
+                [ticket.id.toString(), message.author.username, message.content]
+            );
+        }
 
         console.log(`💾 Messaggio utente salvato per ticket ${ticket.id}: ${message.author.username}`);
 
