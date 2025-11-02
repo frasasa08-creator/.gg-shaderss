@@ -1,1 +1,36 @@
-
+{
+  "common": {
+    "success": "Success",
+    "error": "Error",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "tickets": {
+    "create": {
+      "title": "Create Ticket",
+      "description": "Select the type of assistance you need",
+      "success": "Ticket created successfully!",
+      "error": "Error creating ticket"
+    },
+    "close": {
+      "title": "Close Ticket",
+      "confirm": "Are you sure you want to close this ticket?",
+      "success": "Ticket closed successfully",
+      "reason": "Close reason"
+    }
+  },
+  "chat": {
+    "placeholder": "Type a message...",
+    "send": "Send",
+    "staff": "STAFF",
+    "user": "USER"
+  },
+  "stats": {
+    "title": "Statistics",
+    "total_tickets": "Total Tickets",
+    "open_tickets": "Open Tickets",
+    "response_time": "Average Response Time",
+    "today_tickets": "Today's Tickets"
+  }
+}
