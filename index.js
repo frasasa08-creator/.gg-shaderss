@@ -3233,7 +3233,23 @@ async function initDatabase() {
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        
+
+        // ✅ AGGIUNGI COLONNA is_staff SE NON ESISTE
+        try {
+              await db.query(`
+                  ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_staff BOOLEAN DEFAULT false
+              `);
+              console.log('✅ Colonna is_staff aggiunta/verificata nella tabella messages');
+          } catch (alterError) {
+              console.log('ℹ️ Colonna is_staff già esistente o errore:', alterError.message);
+          }
+          
+          console.log('✅ Database inizializzato correttamente');
+      } catch (error) {
+          console.error('❌ Errore inizializzazione database:', error);
+      }
+  }
+          
         console.log('✅ Database inizializzato correttamente');
     } catch (error) {
         console.error('❌ Errore inizializzazione database:', error);
