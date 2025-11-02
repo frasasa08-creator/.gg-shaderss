@@ -3249,12 +3249,7 @@ async function initDatabase() {
           console.error('❌ Errore inizializzazione database:', error);
       }
   }
-          
-        console.log('✅ Database inizializzato correttamente');
-    } catch (error) {
-        console.error('❌ Errore inizializzazione database:', error);
-    }
-}
+        
 let isDeploying = false;
 async function deployCommands() {
   if (process.env.REGISTER_COMMANDS !== 'true' || isDeploying) {
