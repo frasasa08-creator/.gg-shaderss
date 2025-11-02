@@ -401,12 +401,13 @@ app.get('/api/status', (req, res) => {
 });
 
 // === NUOVA API PER INVIO MESSAGGI CON SUPPORTO CHAT LIVE ===
+// === NUOVA API PER INVIO MESSAGGI CON SUPPORTO CHAT LIVE ===
 app.post('/api/ticket/send-message', async (req, res) => {
     try {
         const { ticketId, message, channelId } = req.body;
         const username = req.user.username;
 
-        console.log(`📨 Invio messaggio per ticket ${ticketId} da ${username}: ${message}`);
+        console.log(`📨 Invio messaggio STAFF per ticket ${ticketId} da ${username}: ${message}`);
 
         // 1. Cerca il ticket
         const ticketQuery = await db.query(
@@ -422,13 +423,30 @@ app.post('/api/ticket/send-message', async (req, res) => {
         const ticket = ticketQuery.rows[0];
         const targetChannelId = channelId || ticket.channel_id;
 
+        // ✅ PREVENZIONE DUPLICATI STAFF
+        const existingStaffMessage = await db.query(
+            `SELECT * FROM messages 
+             WHERE ticket_id = $1 
+             AND content = $2 
+             AND username = $3 
+             AND is_staff = true 
+             AND timestamp > NOW() - INTERVAL '2 seconds'`,
+            [ticketId, message, username]
+        );
+
+        if (existingStaffMessage.rows.length > 0) {
+            console.log('⚠️ Messaggio staff duplicato, salto il salvataggio:', message);
+            return res.json({ success: true, message: { id: 'duplicate', content: message } });
+        }
+
         // 2. Salva il messaggio come STAFF
         const messageQuery = await db.query(
             'INSERT INTO messages (ticket_id, username, content, is_staff, timestamp) VALUES ($1, $2, $3, $4, NOW()) RETURNING *',
-            [ticketId, username, message, true] // ✅ is_staff = true per messaggi staff
+            [ticketId, username, message, true]
         );
 
         const savedMessage = messageQuery.rows[0];
+        console.log(`💾 Messaggio STAFF salvato per ticket ${ticketId}: ${username}`);
 
         // 3. Invia su Discord
         const channel = client.channels.cache.get(targetChannelId);
@@ -446,7 +464,7 @@ app.post('/api/ticket/send-message', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Errore invio messaggio:', error);
+        console.error('❌ Errore invio messaggio staff:', error);
         res.status(500).json({ error: 'Errore interno del server' });
     }
 });
@@ -473,23 +491,33 @@ app.get('/api/ticket/:ticketId/messages', async (req, res) => {
     }
 });
 
-// === API TEMPORANEA PER ELIMINARE DUPLICATI ===
-app.delete('/api/cleanup-duplicates', async (req, res) => {
+// === API PER ELIMINARE DUPLICATI INCROCIATI ===
+app.delete('/api/cleanup-duplicates-improved', async (req, res) => {
     try {
+        // Elimina duplicati dove stesso contenuto, stesso ticket, ma utenti diversi (staff vs user)
         const result = await db.query(`
             DELETE FROM messages 
-            WHERE id NOT IN (
-                SELECT MIN(id) 
-                FROM messages 
-                GROUP BY ticket_id, content, username, DATE(timestamp)
+            WHERE id IN (
+                SELECT m1.id
+                FROM messages m1
+                JOIN messages m2 ON 
+                    m1.ticket_id = m2.ticket_id 
+                    AND m1.content = m2.content 
+                    AND m1.timestamp > NOW() - INTERVAL '1 hour'
+                    AND m2.timestamp > NOW() - INTERVAL '1 hour'
+                    AND m1.id > m2.id
+                    AND (
+                        (m1.is_staff = true AND m2.is_staff = false) OR
+                        (m1.is_staff = false AND m2.is_staff = true)
+                    )
             )
         `);
         
-        console.log(`🧹 Eliminati ${result.rowCount} messaggi duplicati`);
+        console.log(`🧹 Eliminati ${result.rowCount} messaggi duplicati incrociati`);
         res.json({ success: true, deleted: result.rowCount });
         
     } catch (error) {
-        console.error('❌ Errore pulizia duplicati:', error);
+        console.error('❌ Errore pulizia duplicati incrociati:', error);
         res.status(500).json({ error: 'Errore pulizia' });
     }
 });
@@ -3405,33 +3433,37 @@ client.on('messageCreate', async (message) => {
 
         const ticket = ticketResult.rows[0];
         
-        // ✅ VERIFICA SE IL MESSAGGIO ESISTE GIÀ (prevenzione duplicati)
+        // ✅ VERIFICA MIGLIORATA: cerca messaggi identici dello STESSO UTENTE negli ultimi 2 secondi
         const existingMessage = await db.query(
-            'SELECT * FROM messages WHERE ticket_id = $1 AND content = $2 AND username = $3 AND timestamp > NOW() - INTERVAL \'5 seconds\'',
+            `SELECT * FROM messages 
+             WHERE ticket_id = $1 
+             AND content = $2 
+             AND username = $3 
+             AND is_staff = false 
+             AND timestamp > NOW() - INTERVAL '2 seconds'`,
             [ticket.id.toString(), message.content, message.author.username]
         );
 
         if (existingMessage.rows.length > 0) {
-            console.log('⚠️ Messaggio già esistente, salto il salvataggio');
+            console.log('⚠️ Messaggio utente duplicato, salto il salvataggio:', message.content);
             return;
         }
 
-        // Salva il messaggio dell'utente - GESTIONE SICURA
+        // Salva il messaggio dell'utente
         try {
-            // Prova con is_staff
             await db.query(
                 'INSERT INTO messages (ticket_id, username, content, is_staff, timestamp) VALUES ($1, $2, $3, $4, NOW())',
                 [ticket.id.toString(), message.author.username, message.content, false]
             );
+            console.log(`💾 Messaggio UTENTE salvato per ticket ${ticket.id}: ${message.author.username} - "${message.content}"`);
         } catch (columnError) {
             // Se is_staff non esiste, salva senza
             await db.query(
                 'INSERT INTO messages (ticket_id, username, content, timestamp) VALUES ($1, $2, $3, NOW())',
                 [ticket.id.toString(), message.author.username, message.content]
             );
+            console.log(`💾 Messaggio UTENTE salvato (senza is_staff) per ticket ${ticket.id}: ${message.author.username}`);
         }
-
-        console.log(`💾 Messaggio utente salvato per ticket ${ticket.id}: ${message.author.username}`);
 
     } catch (error) {
         console.error('❌ Errore salvataggio messaggio utente:', error);
