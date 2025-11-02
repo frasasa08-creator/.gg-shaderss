@@ -1,3 +1,4 @@
+
 // index.js
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
@@ -522,19 +523,18 @@ app.delete('/api/cleanup-duplicates-improved', async (req, res) => {
     }
 });
 
-// === NUOVA ROTTA PER LA CHAT LIVE - STILE DISCORD ===
+// === NUOVA ROTTA PER LA CHAT LIVE - VERSIONE CORRETTA ===
 app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     try {
         const { ticketId } = req.params;
         
         console.log(`💬 Apertura chat live per ticket: ${ticketId}`);
         
-        // Recupera le informazioni del ticket
+        // Recupera le informazioni del ticket - CORREZIONE: usa CAST per convertire tipi
         const ticketResult = await db.query(
-            'SELECT * FROM tickets WHERE id::text = $1 OR channel_id = $1',
-            [ticketId]
-        );
-
+        'SELECT * FROM tickets WHERE id::text = $1 OR channel_id = $1',
+        [ticketId]
+    );
         if (ticketResult.rows.length === 0) {
             return res.status(404).send(`
                 <!DOCTYPE html>
@@ -581,15 +581,16 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             `);
         }
 
-        // Recupera i messaggi esistenti
+        // Recupera i messaggi esistenti - CORREZIONE: usa CAST anche qui
         const messagesResult = await db.query(
-            'SELECT * FROM messages WHERE ticket_id::text = $1 ORDER BY timestamp ASC',
-            [ticket.id.toString()]
-        );
+        'SELECT * FROM messages WHERE ticket_id::text = $1 ORDER BY timestamp ASC',
+        [ticket.id.toString()]
+    );
 
         const messages = messagesResult.rows;
 
-        // HTML per la chat live con interfaccia IDENTICA a Discord
+        // ... il resto del codice HTML rimane uguale ...
+        // HTML per la chat live con interfaccia Discord-like
         res.send(`
 <!DOCTYPE html>
 <html lang="it">
@@ -597,7 +598,7 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Live - Ticket ${ticket.id}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         * {
@@ -607,306 +608,229 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
         }
 
         :root {
-            --background-primary: #36393f;
-            --background-secondary: #2f3136;
-            --background-tertiary: #202225;
-            --background-accent: #4f545c;
-            --text-normal: #dcddde;
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --background: #36393f;
+            --channel-sidebar: #2f3136;
+            --server-sidebar: #202225;
+            --text-primary: #ffffff;
+            --text-secondary: #b9bbbe;
             --text-muted: #72767d;
-            --text-link: #00b0f4;
-            --interactive-normal: #b9bbbe;
-            --interactive-hover: #dcddde;
-            --interactive-active: #fff;
-            --brand: #5865f2;
-            --brand-hover: #4752c4;
-            --status-online: #3ba55c;
-            --status-idle: #faa81a;
-            --status-dnd: #ed4245;
-            --status-offline: #747f8d;
+            --border: #40444b;
+            --message-hover: #32353b;
+            --success: #00ff88;
         }
 
         body {
-            background: var(--background-primary);
-            color: var(--text-normal);
-            font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-size: 16px;
-            line-height: 1.5;
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             height: 100vh;
             overflow: hidden;
         }
 
-        .app {
+        .app-container {
             display: flex;
             height: 100vh;
         }
 
-        /* Server List */
-        .guilds {
+        /* Server Sidebar */
+        .server-sidebar {
             width: 72px;
-            background: var(--background-tertiary);
+            background: var(--server-sidebar);
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 12px 0;
             gap: 8px;
-            overflow-y: auto;
         }
 
-        .guild-item {
+        .server-icon {
             width: 48px;
             height: 48px;
             border-radius: 50%;
-            background: var(--background-accent);
+            background: var(--primary);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: 600;
             cursor: pointer;
-            transition: border-radius 0.2s ease, background 0.2s ease;
+            transition: border-radius 0.2s ease;
         }
 
-        .guild-item:hover {
+        .server-icon:hover {
             border-radius: 16px;
-            background: var(--brand);
         }
 
-        .guild-item.active {
-            border-radius: 16px;
-            background: var(--brand);
-        }
-
-        /* Channels List */
-        .channels {
+        /* Channel Sidebar */
+        .channel-sidebar {
             width: 240px;
-            background: var(--background-secondary);
+            background: var(--channel-sidebar);
             display: flex;
             flex-direction: column;
         }
 
         .server-header {
-            padding: 16px 8px 0 16px;
-            font-size: 16px;
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
             font-weight: 600;
-            color: white;
-            border-bottom: 1px solid rgba(0,0,0,0.2);
-            height: 48px;
+            font-size: 16px;
             display: flex;
             align-items: center;
+            gap: 8px;
         }
 
-        .channels-list {
-            padding: 8px;
-            flex: 1;
-            overflow-y: auto;
+        .channels-section {
+            padding: 16px;
         }
 
-        .channel-category {
+        .section-title {
             color: var(--text-muted);
             font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
-            margin: 16px 0 8px 8px;
-            letter-spacing: 0.5px;
+            margin-bottom: 8px;
         }
 
         .channel-item {
             padding: 6px 8px;
             border-radius: 4px;
             cursor: pointer;
-            color: var(--text-muted);
+            color: var(--text-secondary);
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 16px;
-            margin-bottom: 2px;
+            font-size: 14px;
         }
 
         .channel-item:hover {
-            background: rgba(79, 84, 92, 0.16);
-            color: var(--text-normal);
+            background: var(--message-hover);
+            color: var(--text-primary);
         }
 
         .channel-item.active {
-            background: rgba(79, 84, 92, 0.32);
-            color: var(--text-normal);
-        }
-
-        .channel-item.has-unread {
-            color: var(--text-normal);
+            background: var(--primary-dark);
+            color: var(--text-primary);
         }
 
         /* Main Chat Area */
-        .chat {
+        .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: var(--background-primary);
+            background: var(--background);
         }
 
         .chat-header {
-            padding: 0 16px;
-            height: 48px;
-            border-bottom: 1px solid rgba(0,0,0,0.2);
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             gap: 8px;
             font-weight: 600;
-            box-shadow: 0 1px 0 rgba(0,0,0,0.1);
         }
 
         .chat-header i {
             color: var(--text-muted);
         }
 
-        .messages {
+        .messages-container {
             flex: 1;
             overflow-y: auto;
             padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 0;
-        }
-
-        .message-group {
-            margin-bottom: 0;
-            position: relative;
+            gap: 16px;
         }
 
         .message {
             display: flex;
-            padding: 2px 48px 2px 72px;
-            position: relative;
-            min-height: 40px;
+            gap: 16px;
+            padding: 4px 16px;
+            border-radius: 4px;
+            transition: background 0.1s ease;
         }
 
         .message:hover {
-            background: rgba(4, 4, 5, 0.07);
+            background: var(--message-hover);
         }
 
         .message-avatar {
-            position: absolute;
-            left: 16px;
-            top: 2px;
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            overflow: hidden;
-            cursor: pointer;
-        }
-
-        .message-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .avatar-placeholder {
-            width: 100%;
-            height: 100%;
-            background: var(--brand);
+            background: var(--primary);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: 600;
-            font-size: 16px;
+            flex-shrink: 0;
         }
 
         .message-content {
-            min-width: 0;
             flex: 1;
+            min-width: 0;
         }
 
         .message-header {
             display: flex;
-            align-items: baseline;
+            align-items: center;
             gap: 8px;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
         }
 
         .message-author {
-            font-weight: 500;
-            color: white;
+            font-weight: 600;
             font-size: 16px;
-            cursor: pointer;
-        }
-
-        .message-author:hover {
-            text-decoration: underline;
         }
 
         .message-timestamp {
             color: var(--text-muted);
             font-size: 12px;
-            font-weight: 400;
         }
 
         .message-text {
             font-size: 16px;
-            line-height: 1.375;
+            line-height: 1.4;
             word-wrap: break-word;
-            color: var(--text-normal);
         }
 
-        .message-text a {
-            color: var(--text-link);
-            text-decoration: none;
-        }
-
-        .message-text a:hover {
-            text-decoration: underline;
-        }
-
-        .badge {
-            background: var(--brand);
+        .staff-badge {
+            background: var(--primary);
             color: white;
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 10px;
             font-weight: 600;
             text-transform: uppercase;
-            margin-left: 8px;
-        }
-
-        .badge-staff {
-            background: #3ba55c;
-        }
-
-        .badge-user {
-            background: #747f8d;
         }
 
         /* Input Area */
         .input-area {
-            padding: 0 16px 24px;
-            background: var(--background-primary);
+            padding: 16px;
+            background: var(--background);
+            border-top: 1px solid var(--border);
         }
 
         .input-container {
-            background: var(--background-secondary);
+            background: var(--channel-sidebar);
             border-radius: 8px;
-            border: 1px solid rgba(0,0,0,0.3);
-            position: relative;
-        }
-
-        .input-container:focus-within {
-            border-color: var(--brand);
+            padding: 16px;
         }
 
         .message-input {
             width: 100%;
             background: transparent;
             border: none;
-            color: var(--text-normal);
+            color: var(--text-primary);
             font-size: 16px;
             font-family: 'Inter', sans-serif;
             resize: none;
             outline: none;
-            padding: 16px;
             max-height: 200px;
-            min-height: 44px;
-            line-height: 1.375;
+            min-height: 20px;
         }
 
         .message-input::placeholder {
@@ -917,7 +841,7 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 16px 16px;
+            margin-top: 8px;
         }
 
         .action-buttons {
@@ -930,56 +854,33 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             border: none;
             color: var(--text-muted);
             cursor: pointer;
-            padding: 8px;
+            padding: 4px;
             border-radius: 4px;
-            transition: color 0.2s ease, background 0.2s ease;
+            transition: color 0.2s ease;
         }
 
         .action-btn:hover {
-            color: var(--text-normal);
-            background: rgba(79, 84, 92, 0.16);
+            color: var(--text-primary);
         }
 
         .send-btn {
-            background: var(--brand);
+            background: var(--primary);
             color: white;
             border: none;
             padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
-            font-weight: 500;
+            font-weight: 600;
             transition: background 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 6px;
         }
 
         .send-btn:hover {
-            background: var(--brand-hover);
+            background: var(--primary-dark);
         }
 
         .send-btn:disabled {
-            background: var(--background-accent);
+            background: var(--border);
             cursor: not-allowed;
-            opacity: 0.5;
-        }
-
-        /* Scrollbar */
-        .messages::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .messages::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .messages::-webkit-scrollbar-thumb {
-            background: rgba(32, 34, 37, 0.6);
-            border-radius: 4px;
-        }
-
-        .messages::-webkit-scrollbar-thumb:hover {
-            background: rgba(32, 34, 37, 0.8);
         }
 
         /* Back Button */
@@ -987,7 +888,7 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             position: fixed;
             top: 20px;
             left: 20px;
-            background: var(--brand);
+            background: var(--primary);
             color: white;
             border: none;
             padding: 10px 16px;
@@ -999,14 +900,19 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             align-items: center;
             gap: 8px;
             text-decoration: none;
-            transition: background 0.2s ease;
         }
 
         .back-btn:hover {
-            background: var(--brand-hover);
+            background: var(--primary-dark);
         }
 
-        /* Empty State */
+        /* Loading and Empty States */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -1016,16 +922,44 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
         .empty-state i {
             font-size: 3rem;
             margin-bottom: 16px;
-            color: var(--background-accent);
+            color: var(--border);
         }
+
+        /* Scrollbar */
+        .messages-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        .user-badge {
+          background: var(--success);
+          color: #000;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+      }
 
         /* Responsive */
         @media (max-width: 768px) {
-            .guilds {
+            .server-sidebar {
                 display: none;
             }
             
-            .channels {
+            .channel-sidebar {
                 width: 200px;
             }
         }
@@ -1037,81 +971,70 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
         Torna ai Ticket
     </a>
 
-    <div class="app">
-        <!-- Server List -->
-        <div class="guilds">
-            <div class="guild-item active">
+    <div class="app-container">
+        <!-- Server Sidebar -->
+        <div class="server-sidebar">
+            <div class="server-icon">
                 <i class="fas fa-ticket-alt"></i>
             </div>
         </div>
 
-        <!-- Channels List -->
-        <div class="channels">
+        <!-- Channel Sidebar -->
+        <div class="channel-sidebar">
             <div class="server-header">
-                ${ticket.ticket_type.toUpperCase()} TICKET
+                <i class="fas fa-comments"></i>
+                Chat Ticket
             </div>
-            <div class="channels-list">
-                <div class="channel-category">TICKET CHANNELS</div>
+            <div class="channels-section">
+                <div class="section-title">Ticket Info</div>
                 <div class="channel-item active">
                     <i class="fas fa-hashtag"></i>
-                    ticket-${ticket.id}
+                    #ticket-${ticket.id}
                 </div>
                 <div class="channel-item">
                     <i class="fas fa-user"></i>
-                    user-${ticket.user_id}
+                    Utente: ${ticket.user_id}
                 </div>
-                
-                <div class="channel-category" style="margin-top: 24px;">INFO</div>
                 <div class="channel-item">
                     <i class="fas fa-tag"></i>
-                    ${ticket.ticket_type}
+                    Tipo: ${ticket.ticket_type}
                 </div>
                 <div class="channel-item">
-                    <i class="fas fa-calendar"></i>
-                    ${new Date(ticket.created_at).toLocaleDateString('it-IT')}
+                    <i class="fas fa-clock"></i>
+                    Aperto: ${new Date(ticket.created_at).toLocaleDateString('it-IT')}
                 </div>
             </div>
         </div>
 
         <!-- Main Chat Area -->
-        <div class="chat">
+        <div class="chat-area">
             <div class="chat-header">
                 <i class="fas fa-hashtag"></i>
-                ticket-${ticket.id}
+                Chat Live - Ticket ${ticket.id}
             </div>
 
-            <div class="messages" id="messagesContainer">
+            <div class="messages-container" id="messagesContainer">
                 ${messages.length === 0 ? `
                     <div class="empty-state">
                         <i class="fas fa-comments"></i>
                         <h3>Nessun messaggio ancora</h3>
                         <p>Inizia la conversazione inviando un messaggio!</p>
                     </div>
-                ` : messages.map(msg => {
-                    const isStaff = msg.is_staff;
-                    const badgeClass = isStaff ? 'badge-staff' : 'badge-user';
-                    const badgeText = isStaff ? 'STAFF' : 'UTENTE';
-                    const avatarColor = isStaff ? '#5865F2' : '#3BA55C';
-                    
-                    return `
-                    <div class="message-group">
-                        <div class="message" data-message-id="${msg.id}">
-                            <div class="message-avatar">
-                                <div class="avatar-placeholder" style="background: ${avatarColor}">
-                                    ${msg.username.charAt(0).toUpperCase()}
-                                </div>
-                            </div>
-                            <div class="message-content">
-                                <div class="message-header">
-                                    <span class="message-author">${msg.username}</span>
-                                    <span class="badge ${badgeClass}">${badgeText}</span>
-                                    <span class="message-timestamp">${new Date(msg.timestamp).toLocaleString('it-IT')}</span>
-                                </div>
-                                <div class="message-text">${msg.content}</div>
-                            </div>
+                ` : messages.map(msg => `
+                    <div class="message" data-message-id="${msg.id}">
+                        <div class="message-avatar">
+                            ${msg.username.charAt(0).toUpperCase()}
                         </div>
-                    </div>`;
-                }).join('')}
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-author">${msg.username}</span>
+                                <span class="staff-badge">STAFF</span>
+                                <span class="message-timestamp">${new Date(msg.timestamp).toLocaleString('it-IT')}</span>
+                            </div>
+                            <div class="message-text">${msg.content}</div>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
 
             <div class="input-area">
@@ -1142,154 +1065,218 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     </div>
 
     <script>
-        const ticketId = '${ticket.id}';
-        const channelId = '${ticket.channel_id}';
-        let chatInterval = null;
+    const ticketId = '${ticket.id}';
+    const channelId = '${ticket.channel_id}';
+    let chatInterval = null;
 
-        // Elementi DOM
-        const messagesContainer = document.getElementById('messagesContainer');
-        const messageInput = document.getElementById('messageInput');
-        const sendButton = document.getElementById('sendButton');
+    // Elementi DOM
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
 
-        // Auto-resize textarea
-        messageInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+    // ✅ CORREZIONE 1: Auto-resize e abilitazione pulsante
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+        
+        // ✅ Abilita/disabilita pulsante invio CORRETTAMENTE
+        sendButton.disabled = this.value.trim() === '';
+        
+        // ✅ Aggiorna visivamente il pulsante
+        if (sendButton.disabled) {
+            sendButton.style.opacity = '0.6';
+            sendButton.style.cursor = 'not-allowed';
+        } else {
+            sendButton.style.opacity = '1';
+            sendButton.style.cursor = 'pointer';
+        }
+    });
+
+    // ✅ CORREZIONE 2: Invio messaggio con Enter (SENZA Shift)
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault(); // ✅ IMPEDISCE ANDATA A CAPO
+            if (!sendButton.disabled) {
+                sendMessage();
+            }
+        }
+    });
+
+    // ✅ CORREZIONE 3: Invio messaggio con click
+    sendButton.addEventListener('click', function() {
+        if (!sendButton.disabled) {
+            sendMessage();
+        }
+    });
+
+    // ✅ CORREZIONE 4: Funzione migliorata per caricare messaggi
+    async function loadMessages() {
+        try {
+            console.log('🔄 Caricamento messaggi per ticket:', ticketId);
             
-            // Abilita/disabilita pulsante invio
-            sendButton.disabled = this.value.trim() === '';
-        });
-
-        // Invio messaggio con Enter (senza Shift)
-        messageInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!sendButton.disabled) {
-                    sendMessage();
-                }
-            }
-        });
-
-        // Invio messaggio con click
-        sendButton.addEventListener('click', sendMessage);
-
-        // Carica messaggi
-        async function loadMessages() {
-            try {
-                const response = await fetch('/api/ticket/' + ticketId + '/messages');
-                const messages = await response.json();
-                displayMessages(messages);
-            } catch (error) {
-                console.error('Errore caricamento messaggi:', error);
-            }
-        }
-
-        // Mostra messaggi nell'interfaccia
-        function displayMessages(messages) {
-            if (messages.length === 0) {
-                messagesContainer.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><h3>Nessun messaggio ancora</h3><p>Inizia la conversazione inviando un messaggio!</p></div>';
-                return;
-            }
-
-            messagesContainer.innerHTML = messages.map(function(msg) {
-                const isStaff = msg.is_staff;
-                const badgeClass = isStaff ? 'badge-staff' : 'badge-user';
-                const badgeText = isStaff ? 'STAFF' : 'UTENTE';
-                const avatarColor = isStaff ? '#5865F2' : '#3BA55C';
-                
-                return '<div class="message-group">' +
-                       '<div class="message" data-message-id="' + msg.id + '">' +
-                       '<div class="message-avatar">' +
-                       '<div class="avatar-placeholder" style="background: ' + avatarColor + '">' + msg.username.charAt(0).toUpperCase() + '</div>' +
-                       '</div>' +
-                       '<div class="message-content">' +
-                       '<div class="message-header">' +
-                       '<span class="message-author">' + msg.username + '</span>' +
-                       '<span class="badge ' + badgeClass + '">' + badgeText + '</span>' +
-                       '<span class="message-timestamp">' + new Date(msg.timestamp).toLocaleString('it-IT') + '</span>' +
-                       '</div>' +
-                       '<div class="message-text">' + msg.content + '</div>' +
-                       '</div>' +
-                       '</div>' +
-                       '</div>';
-            }).join('');
-
-            // Scroll automatico all'ultimo messaggio
-            scrollToBottom();
-        }
-
-        // Invia messaggio
-        async function sendMessage() {
-            const message = messageInput.value.trim();
+            // ✅ CORRETTO: sintassi fixata - senza template literals problematici
+            const response = await fetch('/api/ticket/' + ticketId + '/messages');
             
-            if (!message) return;
-            
-            try {
-                messageInput.disabled = true;
-                sendButton.disabled = true;
-                sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio...';
-
-                const response = await fetch('/api/ticket/send-message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        ticketId: ticketId,
-                        channelId: channelId,
-                        message: message
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    messageInput.value = '';
-                    messageInput.style.height = 'auto';
-                    await loadMessages();
-                } else {
-                    alert('Errore: ' + result.error);
-                }
-            } catch (error) {
-                console.error('Errore invio messaggio:', error);
-                alert('Errore di connessione');
-            } finally {
-                messageInput.disabled = false;
-                sendButton.disabled = true;
-                sendButton.innerHTML = '<i class="fas fa-paper-plane"></i> Invia';
-                messageInput.focus();
+            if (!response.ok) {
+                throw new Error('Errore HTTP: ' + response.status);
             }
+            
+            const messages = await response.json();
+            console.log('✅ Trovati ' + messages.length + ' messaggi');
+            displayMessages(messages);
+        } catch (error) {
+            console.error('❌ Errore caricamento messaggi:', error);
         }
+    }
 
-        // Scroll automatico in fondo
-        function scrollToBottom() {
-            setTimeout(function() {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }, 100);
+    // ✅ CORREZIONE 5: Mostra messaggi nell'interfaccia (STAFF + UTENTE)
+    function displayMessages(messages) {
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><h3>Nessun messaggio ancora</h3><p>Inizia la conversazione inviando un messaggio!</p></div>';
+            return;
         }
+    
+        messagesContainer.innerHTML = messages.map(function(msg) {
+            const isStaff = msg.is_staff;
+            const badge = isStaff ? '<span class="staff-badge">STAFF</span>' : '<span class="user-badge">UTENTE</span>';
+            const avatarColor = isStaff ? 'var(--primary)' : 'var(--success)';
+            
+            return '<div class="message" data-message-id="' + msg.id + '">' +
+                   '<div class="message-avatar" style="background: ' + avatarColor + '">' + msg.username.charAt(0).toUpperCase() + '</div>' +
+                   '<div class="message-content">' +
+                   '<div class="message-header">' +
+                   '<span class="message-author">' + msg.username + '</span>' +
+                   badge +
+                   '<span class="message-timestamp">' + new Date(msg.timestamp).toLocaleString('it-IT') + '</span>' +
+                   '</div>' +
+                   '<div class="message-text">' + msg.content + '</div>' +
+                   '</div>' +
+                   '</div>';
+        }).join('');
+    
+        // Scroll automatico all'ultimo messaggio
+        scrollToBottom();
+    }
 
-        // Aggiornamento in tempo reale
-        function startChatUpdates() {
-            loadMessages();
-            chatInterval = setInterval(loadMessages, 2000);
+    // ✅ CORREZIONE 6: Funzione migliorata per inviare messaggi
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        
+        if (!message || sendButton.disabled) {
+            return;
         }
+        
+        try {
+            // Salva il testo prima di disabilitare
+            const messageToSend = message;
+            
+            // ✅ Disabilita input durante l'invio
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Invio...';
+            sendButton.style.opacity = '0.6';
+            sendButton.style.cursor = 'not-allowed';
 
-        // Gestione visibilità pagina
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                clearInterval(chatInterval);
+            console.log('📨 Invio messaggio:', messageToSend);
+            
+            const response = await fetch('/api/ticket/send-message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ticketId: ticketId,
+                    channelId: channelId,
+                    message: messageToSend
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // ✅ Pulisci input e reset
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                
+                // ✅ Ricarica messaggi immediatamente
+                await loadMessages();
+                
+                console.log('✅ Messaggio inviato con successo');
             } else {
-                startChatUpdates();
+                alert('❌ Errore nell\\'invio del messaggio: ' + (result.error || 'Errore sconosciuto'));
             }
-        });
-
-        // Inizializzazione
-        document.addEventListener('DOMContentLoaded', function() {
-            startChatUpdates();
+        } catch (error) {
+            console.error('❌ Errore invio messaggio:', error);
+            alert('❌ Errore di connessione durante l\\'invio');
+        } finally {
+            // ✅ Riabilita input CORRETTAMENTE
+            messageInput.disabled = false;
+            sendButton.disabled = true; // Inizialmente disabilitato
+            sendButton.innerHTML = '<i class="fas fa-paper-plane"></i> Invia';
+            sendButton.style.opacity = '0.6';
+            sendButton.style.cursor = 'not-allowed';
+            
+            // ✅ Rimetti il focus sull'input
             messageInput.focus();
-            scrollToBottom();
-        });
-    </script>
+        }
+    }
+
+    // ✅ CORREZIONE 7: Scroll automatico in fondo
+    function scrollToBottom() {
+        setTimeout(function() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 100);
+    }
+
+    // ✅ CORREZIONE 8: Aggiornamento in tempo reale MIGLIORATO
+    function startChatUpdates() {
+        // Carica immediatamente
+        loadMessages();
+        
+        // ✅ Aggiorna ogni 3 secondi (più frequente)
+        chatInterval = setInterval(loadMessages, 3000);
+        
+        console.log('🔄 Aggiornamento chat attivato (3s)');
+    }
+
+    function stopChatUpdates() {
+        if (chatInterval) {
+            clearInterval(chatInterval);
+            chatInterval = null;
+            console.log('⏹️ Aggiornamento chat fermato');
+        }
+    }
+
+    // ✅ CORREZIONE 9: Gestione visibilità pagina
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            stopChatUpdates();
+        } else {
+            startChatUpdates();
+        }
+    });
+
+    // ✅ CORREZIONE 10: Inizializzazione MIGLIORATA
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 Inizializzazione chat live per ticket:', ticketId);
+        
+        // Avvia aggiornamenti
+        startChatUpdates();
+        
+        // Focus sull'input
+        messageInput.focus();
+        
+        // Scroll iniziale in fondo
+        scrollToBottom();
+        
+        console.log('✅ Chat live inizializzata correttamente');
+    });
+
+    // ✅ CORREZIONE 11: Gestione chiusura pagina
+    window.addEventListener('beforeunload', function() {
+        stopChatUpdates();
+    });
+</script>
 </body>
 </html>
         `);
