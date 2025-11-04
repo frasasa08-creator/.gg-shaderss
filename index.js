@@ -2894,7 +2894,6 @@ function generateHeader(req) {
                     <nav class="nav-links">
                         <a href="/" class="nav-link">Home</a>
                         <a href="/transcripts" class="nav-link">Transcript</a>
-                        <a href="/debug-permissions" class="nav-link">Debug</a>
                     </nav>
                     <div class="user-section">
                         <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
@@ -3132,12 +3131,15 @@ app.get('/', (req, res) => {
             margin-bottom: 3rem;
         }
 
-        /* Stats Grid */
+
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
             margin: 3rem 0;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .stat-card {
@@ -3406,27 +3408,19 @@ app.get('/', (req, res) => {
         </div>
     </section>
 
-    <!-- Stats Section -->
-    <section class="container">
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number" id="guildsCount">-</div>
-                <div class="stat-label">Server Attivi</div>
+        <!-- Stats Section -->
+        <section class="container">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalTicketsCount">0</div>
+                    <div class="stat-label">Ticket Gestiti</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="uniqueUsersCount">0</div>
+                    <div class="stat-label">Utenti Serviti</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="ticketsCount">-</div>
-                <div class="stat-label">Ticket Gestiti</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="uptimePercent">100%</div>
-                <div class="stat-label">Uptime</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="usersCount">-</div>
-                <div class="stat-label">Utenti Serviti</div>
-            </div>
-        </div>
-    </section>
+        </section>
 
     <!-- Features Section -->
     <section class="container">
@@ -3529,12 +3523,16 @@ app.get('/', (req, res) => {
         </div>
     </footer>
 
-    <script>
+        <script>
             async function updateStatus() {
                 try {
+                    console.log('🔄 Aggiornamento status...');
+                    
                     // Aggiorna status bot
                     const statusRes = await fetch('/api/status');
                     const statusData = await statusRes.json();
+                    
+                    console.log('📡 Dati status:', statusData);
                     
                     if (statusData.bot.status === 'ONLINE') {
                         document.getElementById('botStatus').className = 'status-value status-online';
@@ -3546,72 +3544,135 @@ app.get('/', (req, res) => {
                         document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">SISTEMA OFFLINE</span>';
                     }
                     
-                    document.getElementById('botPing').textContent = statusData.bot.ping + ' ms' || '- ms';
-                    document.getElementById('botGuilds').textContent = statusData.bot.guilds || '-';
-                    document.getElementById('botUptime').textContent = statusData.bot.uptime || '-';
+                    document.getElementById('botPing').textContent = (statusData.bot.ping || 'N/A') + ' ms';
+                    document.getElementById('botGuilds').textContent = statusData.bot.guilds || '0';
+                    document.getElementById('botUptime').textContent = statusData.bot.uptime || '0h 0m 0s';
     
                     // Aggiorna statistiche ticket
                     const statsRes = await fetch('/api/stats');
                     const statsData = await statsRes.json();
                     
-                    document.getElementById('openTicketsCount').textContent = statsData.openTickets || '0';
+                    console.log('📊 Dati statistiche:', statsData);
+                    
                     document.getElementById('totalTicketsCount').textContent = statsData.totalTickets || '0';
                     document.getElementById('uniqueUsersCount').textContent = statsData.uniqueUsers || '0';
-                    document.getElementById('todayTicketsCount').textContent = statsData.todayTickets || '0';
                     
                 } catch(e) {
-                    console.error('Errore aggiornamento status:', e);
+                    console.error('❌ Errore aggiornamento status:', e);
                     document.getElementById('botStatus').className = 'status-value status-offline';
                     document.getElementById('botStatus').textContent = 'OFFLINE';
                     document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">ERRORE CONNESSIONE</span>';
+                    
+                    // Valori di fallback
+                    document.getElementById('totalTicketsCount').textContent = '0';
+                    document.getElementById('uniqueUsersCount').textContent = '0';
                 }
             }
     
-            // Aggiorna ogni 10 secondi
-            updateStatus();
-            setInterval(updateStatus, 10000);
-
-        // Animazioni al caricamento
-        document.addEventListener('DOMContentLoaded', function() {
-            const cards = document.querySelectorAll('.feature-card, .stat-card');
-            cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
+            // Aggiorna immediatamente e poi ogni 10 secondi
+            document.addEventListener('DOMContentLoaded', function() {
+                updateStatus();
+                setInterval(updateStatus, 10000);
                 
-                setTimeout(() => {
-                    card.style.transition = 'all 0.6s ease';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
+                // Animazioni
+                const cards = document.querySelectorAll('.feature-card, .stat-card');
+                cards.forEach((card, index) => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    
+                    setTimeout(() => {
+                        card.style.transition = 'all 0.6s ease';
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, index * 100);
+                });
             });
-        });
-    </script>
+      </script>
 </body>
 </html>
     `);
 });
 
-// === NUOVA API PER STATISTICHE ===
-app.get('/api/stats', async (req, res) => {
+// === DEBUG COMPLETO DATABASE ===
+app.get('/debug-db', async (req, res) => {
     try {
-        const stats = await getTicketStats();
-        const liveStats = await getLiveStats();
+        const tickets = await db.query('SELECT COUNT(*) as total, COUNT(DISTINCT user_id) as users FROM tickets');
+        const openTickets = await db.query('SELECT COUNT(*) as open FROM tickets WHERE status = $1', ['open']);
         
         res.json({
-            success: true,
-            ...stats,
-            ...liveStats,
-            timestamp: new Date().toISOString()
+            database: 'Connesso',
+            totalTickets: tickets.rows[0].total,
+            uniqueUsers: tickets.rows[0].users,
+            openTickets: openTickets.rows[0].open,
+            tables: {
+                tickets: tickets.rows[0],
+                open: openTickets.rows[0]
+            }
         });
     } catch (error) {
-        console.error('❌ Errore API stats:', error);
+        res.json({ error: error.message });
+    }
+});
+
+// === API STATUS MIGLIORATA ===
+app.get('/api/status', (req, res) => {
+    try {
+        const botUptime = process.uptime();
+        const hours = Math.floor(botUptime / 3600);
+        const minutes = Math.floor((botUptime % 3600) / 60);
+        const seconds = Math.floor(botUptime % 60);
+
+        let botStatus = 0;
+        let statusText = 'OFFLINE';
+
+        // CONTROLLO MIGLIORATO del bot status
+        if (client && client.isReady()) {
+            botStatus = 1;
+            statusText = 'ONLINE';
+        } else if (client && client.ws.status === 0) {
+            botStatus = 1;
+            statusText = 'ONLINE';
+        } else {
+            botStatus = 0;
+            statusText = 'OFFLINE';
+        }
+
         res.json({
-            success: false,
-            totalTickets: 0,
-            uniqueUsers: 0,
-            openTickets: 0,
-            todayTickets: 0,
-            timestamp: new Date().toISOString()
+            bot: {
+                status: statusText,
+                statusCode: botStatus,
+                tag: client?.user?.tag || 'Bot Offline',
+                uptime: `${hours}h ${minutes}m ${seconds}s`,
+                rawUptime: botUptime,
+                guilds: client?.guilds?.cache?.size || 0,
+                ping: client?.ws?.ping || 'N/A',
+                lastUpdate: new Date().toISOString(),
+                isReady: client?.isReady() || false,
+                wsStatus: client?.ws?.status || 'N/A'
+            },
+            server: {
+                status: 'ONLINE',
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('Errore in /api/status:', error);
+        res.json({
+            bot: {
+                status: 'OFFLINE',
+                statusCode: 0,
+                tag: 'Errore di connessione',
+                uptime: '0h 0m 0s',
+                guilds: 0,
+                ping: 'N/A',
+                lastUpdate: new Date().toISOString()
+            },
+            server: {
+                status: 'ONLINE',
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString()
+            }
         });
     }
 });
@@ -3714,6 +3775,41 @@ client.on('interactionCreate', async interaction => {
         } catch (error) {
             console.error('Errore chiusura ticket con motivazione:', error);
         }
+    }
+});
+
+// === API STATS ===
+app.get('/api/stats', async (req, res) => {
+    try {
+        const stats = await getTicketStats();
+        const liveStats = await getLiveStats();
+        
+        console.log('📊 Statistiche recuperate:', { ...stats, ...liveStats });
+        
+        res.json({
+            success: true,
+            totalTickets: stats.totalTickets || 0,
+            uniqueUsers: stats.uniqueUsers || 0,
+            openTickets: liveStats.openTickets || 0,
+            todayTickets: liveStats.todayTickets || 0,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Errore API stats:', error);
+        
+        // Fallback con dati di esempio per debugging
+        const fallbackResult = await db.query('SELECT COUNT(*) as count FROM tickets');
+        const fallbackCount = parseInt(fallbackResult?.rows[0]?.count) || 0;
+        
+        res.json({
+            success: false,
+            totalTickets: fallbackCount,
+            uniqueUsers: Math.floor(fallbackCount * 0.8), // Stima
+            openTickets: 0,
+            todayTickets: 0,
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
     }
 });
 
