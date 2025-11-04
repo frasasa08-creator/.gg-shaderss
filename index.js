@@ -1,3 +1,4 @@
+
 // index.js
 const { initializeStatusSystem, detectPreviousCrash, updateBotStatus, updateStatusPeriodically } = require('./utils/statusUtils');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
@@ -65,7 +66,6 @@ const globalCSS = `
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             line-height: 1.6;
             min-height: 100vh;
-            position: relative;
         }
 
         .btn {
@@ -102,7 +102,7 @@ const globalCSS = `
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
 
-        /* Sfondo Animato CORRETTO */
+        /* Sfondo Animato */
         .animated-bg {
             position: fixed;
             top: 0;
@@ -142,14 +142,7 @@ const globalCSS = `
             0%, 100% { transform: translate(0, 0) rotate(0deg); }
             33% { transform: translate(30px, -30px) rotate(120deg); }
             66% { transform: translate(-20px, 20px) rotate(240deg); }
-        }
-
-        /* Container principale sopra lo sfondo */
-        .main-container {
-            position: relative;
-            z-index: 1;
-            min-height: 100vh;
-        }
+}
     </style>
 `;
 
@@ -369,23 +362,25 @@ app.use((err, req, res, next) => {
         <html>
         <head>
             <title>Errore Interno</title>
-            ${globalCSS}
+            <style>
+                body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
+                       border-radius: 8px; text-decoration: none; margin: 10px; }
+                .error-details { background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
+            </style>
         </head>
         <body>
-            <div class="animated-bg"></div>
-            <div class="main-container">
-                <div style="text-align: center; padding: 100px;">
-                    <h1>❌ Errore Interno del Server</h1>
-                    <p>Si è verificato un errore durante l'autenticazione.</p>
-                    
-                    <div style="background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
-                        <strong>Dettagli errore:</strong><br>
-                        ${err.message || 'Errore sconosciuto'}
-                    </div>
-                    
-                    <a href="/auth/discord" class="btn">Riprova Login</a>
-                    <a href="/" class="btn">Torna alla Home</a>
+            <div class="animated-bg">
+                <h1>❌ Errore Interno del Server</h1>
+                <p>Si è verificato un errore durante l'autenticazione.</p>
+                
+                <div class="error-details">
+                    <strong>Dettagli errore:</strong><br>
+                    ${err.message || 'Errore sconosciuto'}
                 </div>
+                
+                <a href="/auth/discord" class="btn">Riprova Login</a>
+                <a href="/" class="btn">Torna alla Home</a>
             </div>
         </body>
         </html>
@@ -402,25 +397,27 @@ app.get('/auth/failure', (req, res) => {
         <html>
         <head>
             <title>Autenticazione Fallita</title>
-            ${globalCSS}
+            <style>
+                body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; 
+                       border-radius: 8px; text-decoration: none; margin: 10px; }
+                .error-details { background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
+            </style>
         </head>
         <body>
-            <div class="animated-bg"></div>
-            <div class="main-container">
-                <div style="text-align: center; padding: 100px;">
-                    <h1>❌ Autenticazione Fallita</h1>
-                    <p>Impossibile accedere con Discord.</p>
-                    
-                    <div style="background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
-                        <strong>Dettagli errore:</strong><br>
-                        Codice: ${error}<br>
-                        Descrizione: ${errorDescription}
-                    </div>
-                    
-                    <a href="/auth/discord" class="btn">Riprova Login</a>
-                    <a href="/" class="btn">Torna alla Home</a>
-                </div>
+        <div class="animated-bg">
+            <h1>❌ Autenticazione Fallita</h1>
+            <p>Impossibile accedere con Discord.</p>
+            
+            <div class="error-details">
+                <strong>Dettagli errore:</strong><br>
+                Codice: ${error}<br>
+                Descrizione: ${errorDescription}
             </div>
+            
+            <a href="/auth/discord" class="btn">Riprova Login</a>
+            <a href="/" class="btn">Torna alla Home</a>
+          </div>
         </body>
         </html>
     `);
@@ -574,6 +571,7 @@ app.get('/api/status', (req, res) => {
 });
 
 // === NUOVA API PER INVIO MESSAGGI CON SUPPORTO CHAT LIVE ===
+// === NUOVA API PER INVIO MESSAGGI CON SUPPORTO CHAT LIVE ===
 app.post('/api/ticket/send-message', async (req, res) => {
     try {
         const { ticketId, message, channelId } = req.body;
@@ -712,17 +710,17 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
                 <html>
                 <head>
                     <title>Ticket Non Trovato</title>
-                    ${globalCSS}
+                    <style>
+                        body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                        .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin: 10px; }
+                    </style>
                 </head>
                 <body>
-                    <div class="animated-bg"></div>
-                    <div class="main-container">
-                        <div style="text-align: center; padding: 100px;">
-                            <h1>❌ Ticket Non Trovato</h1>
-                            <p>Il ticket richiesto non esiste o non è più disponibile.</p>
-                            <a href="/transcripts" class="btn">Torna ai Transcript</a>
-                        </div>
-                    </div>
+                <div class="animated-bg">
+                    <h1>❌ Ticket Non Trovato</h1>
+                    <p>Il ticket richiesto non esiste o non è più disponibile.</p>
+                    <a href="/transcripts" class="btn">Torna ai Transcript</a>
+                </div>
                 </body>
                 </html>
             `);
@@ -740,17 +738,17 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
                 <html>
                 <head>
                     <title>Accesso Negato</title>
-                    ${globalCSS}
+                    <style>
+                        body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                        .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin: 10px; }
+                    </style>
                 </head>
                 <body>
-                    <div class="animated-bg"></div>
-                    <div class="main-container">
-                        <div style="text-align: center; padding: 100px;">
-                            <h1>❌ Accesso Negato</h1>
-                            <p>Non hai i permessi per accedere a questa chat.</p>
-                            <a href="/transcripts" class="btn">Torna ai Transcript</a>
-                        </div>
-                    </div>
+                <div class="animated-bg">
+                    <h1>❌ Accesso Negato</h1>
+                    <p>Non hai i permessi per accedere a questa chat.</p>
+                    <a href="/transcripts" class="btn">Torna ai Transcript</a>
+                </div>
                 </body>
                 </html>
             `);
@@ -764,6 +762,7 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
 
         const messages = messagesResult.rows;
 
+        // ... il resto del codice HTML rimane uguale ...
         // HTML per la chat live con interfaccia Discord-like
         res.send(`
 <!DOCTYPE html>
@@ -801,14 +800,11 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             height: 100vh;
             overflow: hidden;
-            position: relative;
         }
 
         .app-container {
             display: flex;
             height: 100vh;
-            position: relative;
-            z-index: 2;
         }
 
         /* Server Sidebar */
@@ -1128,7 +1124,7 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
           font-size: 10px;
           font-weight: 600;
           text-transform: uppercase;
-        }
+      }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -1143,101 +1139,99 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     </style>
 </head>
 <body>
-    <div class="animated-bg"></div>
-    <div class="main-container">
-        <a href="/transcripts" class="back-btn">
-            <i class="fas fa-arrow-left"></i>
-            Torna ai Ticket
-        </a>
+<div class="animated-bg">
+    <a href="/transcripts" class="back-btn">
+        <i class="fas fa-arrow-left"></i>
+        Torna ai Ticket
+    </a>
 
-        <div class="app-container">
-            <!-- Server Sidebar -->
-            <div class="server-sidebar">
-                <div class="server-icon">
-                    <i class="fas fa-ticket-alt"></i>
-                </div>
+    <div class="app-container">
+        <!-- Server Sidebar -->
+        <div class="server-sidebar">
+            <div class="server-icon">
+                <i class="fas fa-ticket-alt"></i>
             </div>
+        </div>
 
-            <!-- Channel Sidebar -->
-            <div class="channel-sidebar">
-                <div class="server-header">
-                    <i class="fas fa-comments"></i>
-                    Chat Ticket
-                </div>
-                <div class="channels-section">
-                    <div class="section-title">Ticket Info</div>
-                    <div class="channel-item active">
-                        <i class="fas fa-hashtag"></i>
-                        #ticket-${ticket.id}
-                    </div>
-                    <div class="channel-item">
-                        <i class="fas fa-user"></i>
-                        Utente: ${ticket.user_id}
-                    </div>
-                    <div class="channel-item">
-                        <i class="fas fa-tag"></i>
-                        Tipo: ${ticket.ticket_type}
-                    </div>
-                    <div class="channel-item">
-                        <i class="fas fa-clock"></i>
-                        Aperto: ${new Date(ticket.created_at).toLocaleDateString('it-IT')}
-                    </div>
-                </div>
+        <!-- Channel Sidebar -->
+        <div class="channel-sidebar">
+            <div class="server-header">
+                <i class="fas fa-comments"></i>
+                Chat Ticket
             </div>
-
-            <!-- Main Chat Area -->
-            <div class="chat-area">
-                <div class="chat-header">
+            <div class="channels-section">
+                <div class="section-title">Ticket Info</div>
+                <div class="channel-item active">
                     <i class="fas fa-hashtag"></i>
-                    Chat Live - Ticket ${ticket.id}
+                    #ticket-${ticket.id}
                 </div>
-
-                <div class="messages-container" id="messagesContainer">
-                    ${messages.length === 0 ? `
-                        <div class="empty-state">
-                            <i class="fas fa-comments"></i>
-                            <h3>Nessun messaggio ancora</h3>
-                            <p>Inizia la conversazione inviando un messaggio!</p>
-                        </div>
-                    ` : messages.map(msg => `
-                        <div class="message" data-message-id="${msg.id}">
-                            <div class="message-avatar">
-                                ${msg.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div class="message-content">
-                                <div class="message-header">
-                                    <span class="message-author">${msg.username}</span>
-                                    ${msg.is_staff ? '<span class="staff-badge">STAFF</span>' : '<span class="user-badge">UTENTE</span>'}
-                                    <span class="message-timestamp">${new Date(msg.timestamp).toLocaleString('it-IT')}</span>
-                                </div>
-                                <div class="message-text">${msg.content}</div>
-                            </div>
-                        </div>
-                    `).join('')}
+                <div class="channel-item">
+                    <i class="fas fa-user"></i>
+                    Utente: ${ticket.user_id}
                 </div>
+                <div class="channel-item">
+                    <i class="fas fa-tag"></i>
+                    Tipo: ${ticket.ticket_type}
+                </div>
+                <div class="channel-item">
+                    <i class="fas fa-clock"></i>
+                    Aperto: ${new Date(ticket.created_at).toLocaleDateString('it-IT')}
+                </div>
+            </div>
+        </div>
 
-                <div class="input-area">
-                    <div class="input-container">
-                        <textarea 
-                            class="message-input" 
-                            id="messageInput" 
-                            placeholder="Scrivi un messaggio in #ticket-${ticket.id}"
-                            rows="1"
-                        ></textarea>
-                        <div class="input-actions">
-                            <div class="action-buttons">
-                                <button class="action-btn" title="Aggiungi emoji">
-                                    <i class="far fa-smile"></i>
-                                </button>
-                                <button class="action-btn" title="Allega file">
-                                    <i class="fas fa-plus"></i>
-                                </button>
+        <!-- Main Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <i class="fas fa-hashtag"></i>
+                Chat Live - Ticket ${ticket.id}
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                ${messages.length === 0 ? `
+                    <div class="empty-state">
+                        <i class="fas fa-comments"></i>
+                        <h3>Nessun messaggio ancora</h3>
+                        <p>Inizia la conversazione inviando un messaggio!</p>
+                    </div>
+                ` : messages.map(msg => `
+                    <div class="message" data-message-id="${msg.id}">
+                        <div class="message-avatar">
+                            ${msg.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-author">${msg.username}</span>
+                                <span class="staff-badge">STAFF</span>
+                                <span class="message-timestamp">${new Date(msg.timestamp).toLocaleString('it-IT')}</span>
                             </div>
-                            <button class="send-btn" id="sendButton" disabled>
-                                <i class="fas fa-paper-plane"></i>
-                                Invia
+                            <div class="message-text">${msg.content}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <textarea 
+                        class="message-input" 
+                        id="messageInput" 
+                        placeholder="Scrivi un messaggio in #ticket-${ticket.id}"
+                        rows="1"
+                    ></textarea>
+                    <div class="input-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn" title="Aggiungi emoji">
+                                <i class="far fa-smile"></i>
+                            </button>
+                            <button class="action-btn" title="Allega file">
+                                <i class="fas fa-plus"></i>
                             </button>
                         </div>
+                        <button class="send-btn" id="sendButton" disabled>
+                            <i class="fas fa-paper-plane"></i>
+                            Invia
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1457,6 +1451,7 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
         stopChatUpdates();
     });
 </script>
+</div>
 </body>
 </html>
         `);
@@ -1467,17 +1462,17 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
             <html>
             <head>
                 <title>Errore Chat</title>
-                ${globalCSS}
+                <style>
+                    body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                    .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin: 10px; }
+                </style>
             </head>
             <body>
-                <div class="animated-bg"></div>
-                <div class="main-container">
-                    <div style="text-align: center; padding: 100px;">
-                        <h1>❌ Errore Caricamento Chat</h1>
-                        <p>Si è verificato un errore durante il caricamento della chat.</p>
-                        <a href="/transcripts" class="btn">Torna ai Transcript</a>
-                    </div>
-                </div>
+            <div class="animated-bg">
+                <h1>❌ Errore Caricamento Chat</h1>
+                <p>Si è verificato un errore durante il caricamento della chat.</p>
+                <a href="/transcripts" class="btn">Torna ai Transcript</a>
+            </div>
             </body>
             </html>
         `);
@@ -1636,60 +1631,125 @@ app.get('/transcripts/:identifier', (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transcript Non Trovato</title>
-    ${globalCSS}
+    <style>
+        body { 
+            background: #1e1f23; 
+            color: #fff; 
+            font-family: 'Segoe UI', sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+        }
+        h1 { color: #ed4245; }
+        p { font-size: 1.2em; margin-bottom: 20px; }
+        .discord { color: #5865F2; }
+        .debug { 
+            background: #2f3136; 
+            padding: 20px; 
+            border-radius: 8px; 
+            margin: 20px 0; 
+            text-align: left; 
+            font-family: monospace;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .file-list {
+            background: #36393f;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .btn {
+            display: inline-block;
+            background: #5865F2;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin: 10px;
+            transition: background 0.3s;
+            font-weight: 600;
+        }
+        .btn:hover {
+            background: #4752c4;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background: #2f3136;
+            color: #b9bbbe;
+        }
+        .btn-secondary:hover {
+            background: #40444b;
+        }
+        .warning {
+            background: #faa81a;
+            color: #000;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 600;
+        }
+        .file-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #40444b;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+    </style>
 </head>
 <body>
-    <div class="animated-bg"></div>
-    <div class="main-container">
-        <div style="text-align: center; padding: 50px;">
-            <h1>🔍 Transcript Non Trovato</h1>
-            
-            <div style="background: #faa81a; color: #000; padding: 15px; border-radius: 8px; margin: 20px 0; font-weight: 600;">
-                ⚠️ Il transcript richiesto non è stato trovato nel sistema
-            </div>
-            
-            <p>Il transcript <span style="color: #5865F2;">${identifier}</span> non esiste o non è più disponibile.</p>
-            
-            <div style="background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto; font-family: monospace;">
-                <strong>🔧 Informazioni di Debug:</strong><br><br>
-                <strong>Identifier cercato:</strong> ${identifier}<br>
-                <strong>Cartella transcripts:</strong> ${transcriptDir}<br>
-                <strong>Stato cartella:</strong> ${folderInfo}<br>
-                <strong>File .html trovati:</strong> ${fileCount}<br>
-                <strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}<br>
-                <strong>Tempo:</strong> ${new Date().toLocaleString('it-IT')}<br><br>
-                
-                <strong>📁 File disponibili (${fileCount}):</strong>
-                <div style="background: #36393f; padding: 15px; border-radius: 5px; margin: 10px 0; text-align: left; max-height: 300px; overflow-y: auto;">
-                    ${allFilesList.length > 0 ? 
-                        allFilesList.map(file => `
-                            <div style="padding: 5px 0; border-bottom: 1px solid #40444b;">
-                                <strong>${file}</strong><br>
-                                <small>Nome senza estensione: ${file.replace('.html', '')}</small>
-                            </div>
-                        `).join('') : 
-                        'Nessun file transcript trovato'
-                    }
-                </div>
-            </div>
-
-            <div style="margin-top: 30px;">
-                <a href="/debug-transcripts-files" class="btn">🔍 Debug Dettagliato</a>
-                <a href="/transcripts" class="btn">📂 Vedi Transcript Disponibili</a>
-                <a href="/" class="btn" style="background: #2f3136; color: #b9bbbe;">🏠 Torna alla Home</a>
-            </div>
-
-            <div style="margin-top: 40px; padding: 20px; background: #2f3136; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
-                <h3>💡 Possibili cause:</h3>
-                <ul style="text-align: left; margin: 15px 0;">
-                    <li>Il transcript è stato eliminato</li>
-                    <li>Il nome del file non corrisponde</li>
-                    <li>Problemi di case sensitivity</li>
-                    <li>Il transcript non è stato ancora generato</li>
-                </ul>
-            </div>
+<div class="animated-bg">
+    <h1>🔍 Transcript Non Trovato</h1>
+    
+    <div class="warning">
+        ⚠️ Il transcript richiesto non è stato trovato nel sistema
+    </div>
+    
+    <p>Il transcript <span class="discord">${identifier}</span> non esiste o non è più disponibile.</p>
+    
+    <div class="debug">
+        <strong>🔧 Informazioni di Debug:</strong><br><br>
+        <strong>Identifier cercato:</strong> ${identifier}<br>
+        <strong>Cartella transcripts:</strong> ${transcriptDir}<br>
+        <strong>Stato cartella:</strong> ${folderInfo}<br>
+        <strong>File .html trovati:</strong> ${fileCount}<br>
+        <strong>Server:</strong> ${process.env.RENDER_EXTERNAL_URL || 'Local'}<br>
+        <strong>Tempo:</strong> ${new Date().toLocaleString('it-IT')}<br><br>
+        
+        <strong>📁 File disponibili (${fileCount}):</strong>
+        <div class="file-list">
+            ${allFilesList.length > 0 ? 
+                allFilesList.map(file => `
+                    <div class="file-item">
+                        <strong>${file}</strong><br>
+                        <small>Nome senza estensione: ${file.replace('.html', '')}</small>
+                    </div>
+                `).join('') : 
+                'Nessun file transcript trovato'
+            }
         </div>
     </div>
+
+    <div style="margin-top: 30px;">
+        <a href="/debug-transcripts-files" class="btn">🔍 Debug Dettagliato</a>
+        <a href="/transcripts" class="btn">📂 Vedi Transcript Disponibili</a>
+        <a href="/" class="btn btn-secondary">🏠 Torna alla Home</a>
+    </div>
+
+    <div style="margin-top: 40px; padding: 20px; background: #2f3136; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <h3>💡 Possibili cause:</h3>
+        <ul style="text-align: left; margin: 15px 0;">
+            <li>Il transcript è stato eliminato</li>
+            <li>Il nome del file non corrisponde</li>
+            <li>Problemi di case sensitivity</li>
+            <li>Il transcript non è stato ancora generato</li>
+        </ul>
+    </div>
+</div>
 </body>
 </html>
     `);
@@ -1774,36 +1834,67 @@ async function checkStaffRole(req, res, next) {
             <html>
             <head>
                 <title>Accesso Negato</title>
-                ${globalCSS}
+                <style>
+                    body { 
+                        background: #1e1f23; 
+                        color: #ed4245; 
+                        font-family: sans-serif; 
+                        text-align: center; 
+                        padding: 100px; 
+                    }
+                    .btn { 
+                        display: inline-block; 
+                        background: #5865F2; 
+                        color: white; 
+                        padding: 10px 20px; 
+                        border-radius: 8px; 
+                        text-decoration: none; 
+                        margin: 10px; 
+                    }
+                    .info-box {
+                        background: #2f3136;
+                        padding: 20px;
+                        border-radius: 8px;
+                        margin: 20px 0;
+                        text-align: left;
+                        max-width: 600px;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+                    .command-example {
+                        background: #36393f;
+                        padding: 10px;
+                        border-radius: 5px;
+                        font-family: monospace;
+                        margin: 10px 0;
+                    }
+                </style>
             </head>
             <body>
-                <div class="animated-bg"></div>
-                <div class="main-container">
-                    <div style="text-align: center; padding: 100px;">
-                        <h1>❌ Accesso Negato ai Transcript</h1>
-                        <p>Non hai i permessi necessari per accedere alla sezione transcript.</p>
-                        
-                        <div style="background: #2f3136; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
-                            <h3>🔒 Come ottenere l'accesso:</h3>
-                            <p>Per accedere ai transcript, devi avere uno dei <strong>ruoli consentiti</strong> configurati con il comando:</p>
-                            
-                            <div style="background: #36393f; padding: 10px; border-radius: 5px; font-family: monospace; margin: 10px 0;">
-                                /allowedroles set ruoli: ID_RUOLO1, ID_RUOLO2
-                            </div>
-                            
-                            <p><strong>Oppure</strong> essere un <strong>amministratore del server</strong> Discord.</p>
-                            
-                            <p><strong>I ruoli consentiti sono gli stessi che possono usare i comandi del bot!</strong></p>
-                            
-                            <p>Contatta un amministratore del server para essere aggiunto ai ruoli autorizzati.</p>
-                        </div>
-                        
-                        <div>
-                            <a href="/" class="btn">🏠 Torna alla Home</a>
-                            <a href="/logout" class="btn">🚪 Logout</a>
-                        </div>
+            <div class="animated-bg">
+                <h1>❌ Accesso Negato ai Transcript</h1>
+                <p>Non hai i permessi necessari per accedere alla sezione transcript.</p>
+                
+                <div class="info-box">
+                    <h3>🔒 Come ottenere l'accesso:</h3>
+                    <p>Per accedere ai transcript, devi avere uno dei <strong>ruoli consentiti</strong> configurati con il comando:</p>
+                    
+                    <div class="command-example">
+                        /allowedroles set ruoli: ID_RUOLO1, ID_RUOLO2
                     </div>
+                    
+                    <p><strong>Oppure</strong> essere un <strong>amministratore del server</strong> Discord.</p>
+                    
+                    <p><strong>I ruoli consentiti sono gli stessi che possono usare i comandi del bot!</strong></p>
+                    
+                    <p>Contatta un amministratore del server para essere aggiunto ai ruoli autorizzati.</p>
                 </div>
+                
+                <div>
+                    <a href="/" class="btn">🏠 Torna alla Home</a>
+                    <a href="/logout" class="btn">🚪 Logout</a>
+                </div>
+            </div>
             </body>
             </html>
         `);
@@ -1871,17 +1962,14 @@ app.get('/dashboard', checkStaffRole, async (req, res) => {
                 <html>
                 <head>
                     <title>Nessun Accesso</title>
-                    ${globalCSS}
+                    <style>body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }</style>
                 </head>
                 <body>
-                    <div class="animated-bg"></div>
-                    <div class="main-container">
-                        <div style="text-align: center; padding: 100px;">
-                            <h1>❌ Nessun Server Accessibile</h1>
-                            <p>Non hai i permessi per gestire ticket in nessun server.</p>
-                            <a href="/" style="color: #5865F2;">Torna alla Home</a>
-                        </div>
-                    </div>
+                <div class="animated-bg">
+                    <h1>❌ Nessun Server Accessibile</h1>
+                    <p>Non hai i permessi per gestire ticket in nessun server.</p>
+                    <a href="/" style="color: #5865F2;">Torna alla Home</a>
+                </div>
                 </body>
                 </html>
             `);
@@ -2059,8 +2147,7 @@ app.get('/dashboard', checkStaffRole, async (req, res) => {
     </style>
 </head>
 <body>
-    <div class="animated-bg"></div>
-    <div class="main-container">
+    <div class="animated-bg">
     ${header}
 
     <div class="container">
@@ -2261,14 +2348,11 @@ app.get('/dashboard/:guildId', checkStaffRole, async (req, res) => {
             font-family: 'Inter', sans-serif;
             padding: 20px;
             min-height: 100vh;
-            position: relative;
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            position: relative;
-            z-index: 2;
         }
 
         .header {
@@ -2537,8 +2621,7 @@ app.get('/dashboard/:guildId', checkStaffRole, async (req, res) => {
     </style>
 </head>
 <body>
-<div class="animated-bg"></div>
-<div class="main-container">
+<div class="animated-bg">
     <div class="container">
         <div class="header">
             <h1><i class="fas fa-shield-alt"></i> Staff Area - Gestione Ticket</h1>
@@ -2888,36 +2971,40 @@ app.get('/debug-permissions', async (req, res) => {
             <html>
             <head>
                 <title>Debug Permessi</title>
-                ${globalCSS}
+                <style>
+                    body { background: #1e1f23; color: white; font-family: sans-serif; padding: 20px; }
+                    .guild { background: #2f3136; margin: 10px 0; padding: 15px; border-radius: 8px; }
+                    .has-access { border-left: 5px solid #00ff88; }
+                    .no-access { border-left: 5px solid #ed4245; }
+                    .role { display: inline-block; background: #5865F2; padding: 2px 8px; border-radius: 4px; margin: 2px; font-size: 0.9em; }
+                    .allowed-role { background: #00ff88; color: black; }
+                </style>
             </head>
             <body>
-                <div class="animated-bg"></div>
-                <div class="main-container">
-                    <div style="padding: 20px;">
-                        <h1>🔍 Debug Permessi - ${userInfo.username}</h1>
+            <div class="animated-bg">
+                <h1>🔍 Debug Permessi - ${userInfo.username}</h1>
+                
+                ${userInfo.guilds.map(guild => `
+                    <div class="guild ${guild.hasAccess ? 'has-access' : 'no-access'}">
+                        <h3>${guild.name} ${guild.hasAccess ? '✅' : '❌'}</h3>
+                        <p><strong>ID:</strong> ${guild.id}</p>
+                        <p><strong>Admin:</strong> ${guild.isAdmin ? '✅' : '❌'}</p>
                         
-                        ${userInfo.guilds.map(guild => `
-                            <div style="background: #2f3136; margin: 10px 0; padding: 15px; border-radius: 8px; border-left: 5px solid ${guild.hasAccess ? '#00ff88' : '#ed4245'};">
-                                <h3>${guild.name} ${guild.hasAccess ? '✅' : '❌'}</h3>
-                                <p><strong>ID:</strong> ${guild.id}</p>
-                                <p><strong>Admin:</strong> ${guild.isAdmin ? '✅' : '❌'}</p>
-                                
-                                <p><strong>Ruoli utente:</strong><br>
-                                ${guild.userRoles.map(roleId => `<span style="display: inline-block; background: #5865F2; padding: 2px 8px; border-radius: 4px; margin: 2px; font-size: 0.9em;">${roleId}</span>`).join('') || 'Nessun ruolo'}</p>
-                                
-                                <p><strong>Ruoli consentiti:</strong><br>
-                                ${guild.allowedRoles ? guild.allowedRoles.map(roleId => 
-                                    `<span style="display: inline-block; background: #00ff88; color: black; padding: 2px 8px; border-radius: 4px; margin: 2px; font-size: 0.9em; ${guild.userRoles.includes(roleId) ? 'border: 2px solid #5865F2;' : ''}">${roleId}</span>`
-                                ).join('') : 'Nessun ruolo consentito'}</p>
-                                
-                                <p><strong>Accesso transcript:</strong> ${guild.hasAccess ? '✅ CONSENTITO' : '❌ NEGATO'}</p>
-                            </div>
-                        `).join('')}
+                        <p><strong>Ruoli utente:</strong><br>
+                        ${guild.userRoles.map(roleId => `<span class="role">${roleId}</span>`).join('') || 'Nessun ruolo'}</p>
                         
-                        <br>
-                        <a href="/" style="color: #5865F2;">← Torna alla Home</a>
+                        <p><strong>Ruoli consentiti:</strong><br>
+                        ${guild.allowedRoles ? guild.allowedRoles.map(roleId => 
+                            `<span class="role allowed-role ${guild.userRoles.includes(roleId) ? 'user-has-role' : ''}">${roleId}</span>`
+                        ).join('') : 'Nessun ruolo consentito'}</p>
+                        
+                        <p><strong>Accesso transcript:</strong> ${guild.hasAccess ? '✅ CONSENTITO' : '❌ NEGATO'}</p>
                     </div>
-                </div>
+                `).join('')}
+                
+                <br>
+                <a href="/" style="color: #5865F2;">← Torna alla Home</a>
+            </div>
             </body>
             </html>
         `);
@@ -2955,7 +3042,6 @@ function generateHeader(req) {
         </header>
     `;
 }
-
 // === HOMEPAGE ===
 app.get('/', (req, res) => {
     console.log('🏠 Homepage richiesta - Utente autenticato:', req.isAuthenticated());
@@ -2974,8 +3060,40 @@ app.get('/', (req, res) => {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        ${globalCSS}
-        
+        :root {
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --primary-light: rgba(88, 101, 242, 0.1);
+            --success: #00ff88;
+            --error: #ed4245;
+            --warning: #faa81a;
+            --background: #0a0a0a;
+            --surface: #111111;
+            --card-bg: #1a1a1a;
+            --card-hover: #252525;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --border: #2a2a2a;
+            --border-light: #333333;
+            --gradient: linear-gradient(135deg, var(--primary) 0%, #9b59b6 50%, var(--success) 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -3378,52 +3496,51 @@ app.get('/', (req, res) => {
     </style>
 </head>
 <body>
-    <div class="animated-bg"></div>
-    <div class="main-container">
-        <!-- Header -->
-        <header class="modern-header">
-            <div class="container">
-                <div class="nav-container">
-                    <div class="logo">.gg/shaderss</div>
-                    <nav class="nav-links">
-                        <a href="/" class="nav-link">Home</a>
-                        <a href="/transcripts" class="nav-link">Transcript</a>
-                        <a href="/debug-permissions" class="nav-link">Debug</a>
-                    </nav>
-                    <div class="user-section">
-                        <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
-                             class="user-avatar" alt="Avatar">
-                        <a href="/logout" class="btn btn-outline">
-                            <i class="fas fa-sign-out-alt"></i> Logout
-                        </a>
-                    </div>
+<div class="animated-bg">
+    <!-- Header -->
+    <header class="modern-header">
+        <div class="container">
+            <div class="nav-container">
+                <div class="logo">.gg/shaderss</div>
+                <nav class="nav-links">
+                    <a href="/" class="nav-link">Home</a>
+                    <a href="/transcripts" class="nav-link">Transcript</a>
+                    <a href="/debug-permissions" class="nav-link">Debug</a>
+                </nav>
+                <div class="user-section">
+                    <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                         class="user-avatar" alt="Avatar">
+                    <a href="/logout" class="btn btn-outline">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
                 </div>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- Hero Section -->
-        <section class="hero">
-            <div class="container">
-                <div class="hero-badge">
-                    <i class="fas fa-robot"></i>
-                    Advanced Discord Bot
-                </div>
-                <h1 class="hero-title">Gestione Ticket Avanzata</h1>
-                <p class="hero-subtitle">
-                    Sistema di ticketing professionale con transcript automatici, 
-                    chat live e moderazione integrata per la tua community Discord.
-                </p>
-                <div class="hero-actions">
-                    <a href="/transcripts" class="btn">
-                        <i class="fas fa-file-alt"></i> Gestisci Transcript
-                    </a>
-                    <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" 
-                       class="btn btn-outline" target="_blank">
-                        <i class="fas fa-plus"></i> Invita Bot
-                    </a>
-                </div>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-badge">
+                <i class="fas fa-robot"></i>
+                Advanced Discord Bot
             </div>
-        </section>
+            <h1 class="hero-title">Gestione Ticket Avanzata</h1>
+            <p class="hero-subtitle">
+                Sistema di ticketing professionale con transcript automatici, 
+                chat live e moderazione integrata per la tua community Discord.
+            </p>
+            <div class="hero-actions">
+                <a href="/transcripts" class="btn">
+                    <i class="fas fa-file-alt"></i> Gestisci Transcript
+                </a>
+                <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" 
+                   class="btn btn-outline" target="_blank">
+                    <i class="fas fa-plus"></i> Invita Bot
+                </a>
+            </div>
+        </div>
+    </section>
 
         <!-- Stats Section -->
         <section class="container">
@@ -3439,106 +3556,106 @@ app.get('/', (req, res) => {
             </div>
         </section>
 
-        <!-- Features Section -->
-        <section class="container">
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-ticket-alt"></i>
-                    </div>
-                    <h3 class="feature-title">Sistema Ticket</h3>
-                    <p class="feature-description">
-                        Gestione ticket avanzata con categorie personalizzabili, 
-                        chiusura automatica e transcript dettagliati.
-                    </p>
+    <!-- Features Section -->
+    <section class="container">
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-ticket-alt"></i>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-comments"></i>
-                    </div>
-                    <h3 class="feature-title">Chat Live</h3>
-                    <p class="feature-description">
-                        Interfaccia di chat in tempo reale per comunicare con 
-                        gli utenti direttamente dal pannello web.
-                    </p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <h3 class="feature-title">Moderazione</h3>
-                    <p class="feature-description">
-                        Tool di moderazione completi con log dettagliati e 
-                        sistema di ruoli avanzato per lo staff.
-                    </p>
-                </div>
+                <h3 class="feature-title">Sistema Ticket</h3>
+                <p class="feature-description">
+                    Gestione ticket avanzata con categorie personalizzabili, 
+                    chiusura automatica e transcript dettagliati.
+                </p>
             </div>
-        </section>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h3 class="feature-title">Chat Live</h3>
+                <p class="feature-description">
+                    Interfaccia di chat in tempo reale per comunicare con 
+                    gli utenti direttamente dal pannello web.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h3 class="feature-title">Moderazione</h3>
+                <p class="feature-description">
+                    Tool di moderazione completi con log dettagliati e 
+                    sistema di ruoli avanzato per lo staff.
+                </p>
+            </div>
+        </div>
+    </section>
 
-        <!-- Status Section -->
-        <section class="container">
-            <div class="status-section">
-                <div class="status-header">
-                    <h2 class="status-title">Stato Sistema</h2>
-                    <div class="status-badge" id="globalStatus">
-                        <span class="status-value status-online">ONLINE</span>
-                    </div>
-                </div>
-                <div class="status-grid">
-                    <div class="status-item">
-                        <span class="status-label">Stato Bot</span>
-                        <span class="status-value status-online" id="botStatus">ONLINE</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Ping</span>
-                        <span class="status-value" id="botPing">- ms</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Server</span>
-                        <span class="status-value" id="botGuilds">-</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Uptime</span>
-                        <span class="status-value" id="botUptime">-</span>
-                    </div>
+    <!-- Status Section -->
+    <section class="container">
+        <div class="status-section">
+            <div class="status-header">
+                <h2 class="status-title">Stato Sistema</h2>
+                <div class="status-badge" id="globalStatus">
+                    <span class="status-value status-online">ONLINE</span>
                 </div>
             </div>
-        </section>
+            <div class="status-grid">
+                <div class="status-item">
+                    <span class="status-label">Stato Bot</span>
+                    <span class="status-value status-online" id="botStatus">ONLINE</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Ping</span>
+                    <span class="status-value" id="botPing">- ms</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Server</span>
+                    <span class="status-value" id="botGuilds">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Uptime</span>
+                    <span class="status-value" id="botUptime">-</span>
+                </div>
+            </div>
+        </div>
+    </section>
 
-        <!-- Footer -->
-        <footer class="footer">
-            <div class="container">
-                <div class="footer-content">
-                    <div class="footer-section">
-                        <h3>.gg/shaderss</h3>
-                        <p style="color: var(--text-secondary);">
-                            Bot Discord avanzato per la gestione di community 
-                            con strumenti professionali per moderazione e supporto.
-                        </p>
-                    </div>
-                    <div class="footer-section">
-                        <h3>Link Rapidi</h3>
-                        <ul class="footer-links">
-                            <li><a href="/">Home</a></li>
-                            <li><a href="/transcripts">Transcript</a></li>
-                            <li><a href="/debug-permissions">Debug</a></li>
-                            <li><a href="/auth/discord">Login</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-section">
-                        <h3>Supporto</h3>
-                        <ul class="footer-links">
-                            <li><a href="https://discord.gg/shaderss" target="_blank">Server Discord</a></li>
-                            <li><a href="/health">Status</a></li>
-                            <li><a href="/api/status">API Status</a></li>
-                        </ul>
-                    </div>
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>.gg/shaderss</h3>
+                    <p style="color: var(--text-secondary);">
+                        Bot Discord avanzato per la gestione di community 
+                        con strumenti professionali per moderazione e supporto.
+                    </p>
                 </div>
-                <div class="footer-bottom">
-                    <p>&copy; 2024 .gg/shaderss • Powered by sasa111</p>
+                <div class="footer-section">
+                    <h3>Link Rapidi</h3>
+                    <ul class="footer-links">
+                        <li><a href="/">Home</a></li>
+                        <li><a href="/transcripts">Transcript</a></li>
+                        <li><a href="/debug-permissions">Debug</a></li>
+                        <li><a href="/auth/discord">Login</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Supporto</h3>
+                    <ul class="footer-links">
+                        <li><a href="https://discord.gg/shaderss" target="_blank">Server Discord</a></li>
+                        <li><a href="/health">Status</a></li>
+                        <li><a href="/api/status">API Status</a></li>
+                    </ul>
                 </div>
             </div>
-        </footer>
+            <div class="footer-bottom">
+                <p>&copy; 2024 .gg/shaderss • Powered by sasa111</p>
+            </div>
+        </div>
+    </footer>
 
         <script>
             async function updateStatus() {
@@ -3604,8 +3721,8 @@ app.get('/', (req, res) => {
                     }, index * 100);
                 });
             });
-        </script>
-    </div>
+      </script>
+</div>
 </body>
 </html>
     `);
