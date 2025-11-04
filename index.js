@@ -32,6 +32,78 @@ const client = new Client({
     ],
 });
 
+// === CSS GLOBALE STILE ERASER ===
+const globalCSS = `
+    <style>
+        :root {
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --primary-light: rgba(88, 101, 242, 0.1);
+            --success: #00ff88;
+            --error: #ed4245;
+            --warning: #faa81a;
+            --background: #0a0a0a;
+            --surface: #111111;
+            --card-bg: #1a1a1a;
+            --card-hover: #252525;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --border: #2a2a2a;
+            --border-light: #333333;
+            --gradient: linear-gradient(135deg, var(--primary) 0%, #9b59b6 50%, var(--success) 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(88, 101, 242, 0.3);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+`;
+
 // Avvia pulizia automatica all'avvio e ogni 24 ore
 async function startAutoCleanup() {
     try {
@@ -2748,7 +2820,33 @@ app.get('/debug-permissions', async (req, res) => {
     }
 });
 
-// === HOMEPAGE MODERNA ===
+// === FUNZIONE HELPER PER HEADER ===
+function generateHeader(req) {
+    return `
+        <header class="modern-header">
+            <div class="container">
+                <div class="nav-container">
+                    <div class="logo">.gg/shaderss</div>
+                    <nav class="nav-links">
+                        <a href="/" class="nav-link">Home</a>
+                        <a href="/transcripts" class="nav-link">Transcript</a>
+                        <a href="/debug-permissions" class="nav-link">Debug</a>
+                    </nav>
+                    <div class="user-section">
+                        <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                             class="user-avatar" alt="Avatar">
+                        <span style="color: var(--text-secondary);">${req.user.username}</span>
+                        <a href="/logout" class="btn btn-outline" style="margin-left: 1rem;">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+    `;
+}
+
+// === HOMEPAGE ===
 app.get('/', (req, res) => {
     console.log('🏠 Homepage richiesta - Utente autenticato:', req.isAuthenticated());
     
@@ -2762,30 +2860,33 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>.gg/shaderss • Discord Bot</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>.gg/shaderss • Advanced Discord Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --primary-light: rgba(88, 101, 242, 0.1);
+            --success: #00ff88;
+            --error: #ed4245;
+            --warning: #faa81a;
+            --background: #0a0a0a;
+            --surface: #111111;
+            --card-bg: #1a1a1a;
+            --card-hover: #252525;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --border: #2a2a2a;
+            --border-light: #333333;
+            --gradient: linear-gradient(135deg, var(--primary) 0%, #9b59b6 50%, var(--success) 100%);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-        }
-
-        :root {
-            --primary: #5865F2;
-            --primary-dark: #4752c4;
-            --success: #00ff88;
-            --error: #ed4245;
-            --warning: #faa81a;
-            --background: #0f0f12;
-            --card-bg: #1a1a1d;
-            --card-hover: #232327;
-            --text-primary: #ffffff;
-            --text-secondary: #b9bbbe;
-            --text-muted: #72767d;
-            --border: #2f3136;
-            --border-light: #40444b;
         }
 
         body {
@@ -2794,157 +2895,309 @@ app.get('/', (req, res) => {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             line-height: 1.6;
             min-height: 100vh;
-            padding: 20px;
+            overflow-x: hidden;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
+            padding: 0 20px;
         }
 
-        .user-header {
+        /* Header Moderno */
+        .modern-header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(20px);
+        }
+
+        .nav-container {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: var(--card-bg);
-            border-radius: 16px;
-            border: 1px solid var(--border);
+            padding: 1rem 0;
         }
 
-        .user-info {
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gradient);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .user-section {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 1rem;
         }
 
         .user-avatar {
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             border: 2px solid var(--primary);
-        }
-
-        .user-details h2 {
-            color: var(--text-primary);
-            margin-bottom: 5px;
-        }
-
-        .user-details p {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 15px;
-            align-items: center;
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 12px 24px;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
             background: var(--primary);
             color: white;
             text-decoration: none;
-            border-radius: 12px;
+            border-radius: 8px;
             font-weight: 600;
             transition: all 0.3s ease;
             border: none;
             cursor: pointer;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
 
         .btn:hover {
             background: var(--primary-dark);
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(88, 101, 242, 0.3);
+            box-shadow: 0 8px 25px rgba(88, 101, 242, 0.3);
         }
 
-        .btn-secondary {
-            background: var(--border);
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
             color: var(--text-primary);
         }
 
-        .btn-secondary:hover {
-            background: var(--border-light);
+        .btn-outline:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
         }
 
-        .btn-logout {
-            background: var(--error);
+        /* Hero Section */
+        .hero {
+            padding: 6rem 0 4rem;
+            text-align: center;
+            position: relative;
         }
 
-        .btn-logout:hover {
-            background: #d83639;
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at center, rgba(88, 101, 242, 0.1) 0%, transparent 70%);
+            pointer-events: none;
         }
 
-        .logo {
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--primary-light);
+            color: var(--primary);
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(88, 101, 242, 0.2);
+        }
+
+        .hero-title {
             font-size: 3.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--primary) 0%, #9b59b6 100%);
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, var(--text-secondary) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 10px;
+            margin-bottom: 1rem;
+            line-height: 1.1;
         }
 
-        .tagline {
-            font-size: 1.2rem;
+        .hero-subtitle {
+            font-size: 1.25rem;
             color: var(--text-secondary);
-            margin-bottom: 25px;
-            font-weight: 500;
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
-        .main-grid {
+        .hero-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 3rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 25px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 3rem 0;
         }
 
-        .card {
+        .stat-card {
             background: var(--card-bg);
-            border-radius: 16px;
-            padding: 25px;
+            padding: 2rem;
+            border-radius: 12px;
             border: 1px solid var(--border);
+            text-align: center;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
         }
 
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-            border-color: var(--primary);
-        }
-
-        .card::before {
+        .stat-card::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             height: 3px;
-            background: linear-gradient(90deg, var(--primary), var(--success));
+            background: var(--gradient);
         }
 
-        .card h2 {
-            font-size: 1.4rem;
-            margin-bottom: 20px;
-            color: var(--text-primary);
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 4rem 0;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--primary-light);
+            border-radius: 12px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            color: var(--primary);
+            font-size: 1.5rem;
+        }
+
+        .feature-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .feature-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Status Section */
+        .status-section {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 3rem;
+            margin: 4rem 0;
+            border: 1px solid var(--border);
+        }
+
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .status-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
         }
 
         .status-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 0;
+            padding: 1rem 0;
             border-bottom: 1px solid var(--border-light);
         }
 
@@ -2955,7 +3208,6 @@ app.get('/', (req, res) => {
         .status-label {
             color: var(--text-secondary);
             font-weight: 500;
-            flex: 1;
         }
 
         .status-value {
@@ -2971,142 +3223,247 @@ app.get('/', (req, res) => {
             color: var(--error);
         }
 
-        .widget-container {
-            border-radius: 12px;
-            overflow: hidden;
-            background: var(--border);
-            margin-top: 15px;
-        }
-
+        /* Footer */
         .footer {
-            text-align: center;
-            margin-top: 50px;
-            padding: 30px;
-            color: var(--text-muted);
+            background: var(--surface);
             border-top: 1px solid var(--border);
+            padding: 3rem 0;
+            margin-top: 4rem;
         }
 
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 3rem;
+        }
+
+        .footer-section h3 {
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        .footer-bottom {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        /* Responsive */
         @media (max-width: 768px) {
-            .user-header {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            
+            .nav-container {
                 flex-direction: column;
-                gap: 15px;
+                gap: 1rem;
+            }
+            
+            .nav-links {
+                gap: 1rem;
+            }
+            
+            .hero-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .status-header {
+                flex-direction: column;
+                gap: 1rem;
                 text-align: center;
-            }
-            
-            .header-actions {
-                flex-direction: column;
-                width: 100%;
-            }
-            
-            .btn {
-                width: 100%;
-                justify-content: center;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header con info utente -->
-        <div class="user-header">
-            <div class="user-info">
-                <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
-                     class="user-avatar" alt="Avatar">
-                <div class="user-details">
-                    <h2>Benvenuto, ${req.user.username}!</h2>
-                    <p>Accesso effettuato con Discord</p>
+    <!-- Header -->
+    <header class="modern-header">
+        <div class="container">
+            <div class="nav-container">
+                <div class="logo">.gg/shaderss</div>
+                <nav class="nav-links">
+                    <a href="/" class="nav-link">Home</a>
+                    <a href="/transcripts" class="nav-link">Transcript</a>
+                    <a href="/debug-permissions" class="nav-link">Debug</a>
+                </nav>
+                <div class="user-section">
+                    <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                         class="user-avatar" alt="Avatar">
+                    <a href="/logout" class="btn btn-outline">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
                 </div>
             </div>
-            <div class="header-actions">
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-badge">
+                <i class="fas fa-robot"></i>
+                Advanced Discord Bot
+            </div>
+            <h1 class="hero-title">Gestione Ticket Avanzata</h1>
+            <p class="hero-subtitle">
+                Sistema di ticketing professionale con transcript automatici, 
+                chat live e moderazione integrata per la tua community Discord.
+            </p>
+            <div class="hero-actions">
                 <a href="/transcripts" class="btn">
-                    <i class="fas fa-file-alt"></i> Transcript Staff
+                    <i class="fas fa-file-alt"></i> Gestisci Transcript
                 </a>
-                <a href="/logout" class="btn btn-logout">
-                    <i class="fas fa-sign-out-alt"></i> Logout
+                <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" 
+                   class="btn btn-outline" target="_blank">
+                    <i class="fas fa-plus"></i> Invita Bot
                 </a>
             </div>
         </div>
+    </section>
 
-        <!-- Header principale -->
-        <header class="header" style="text-align: center; margin-bottom: 40px; padding: 40px 20px; background: linear-gradient(135deg, var(--card-bg) 0%, #1e1e22 100%); border-radius: 20px; border: 1px solid var(--border); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
-            <h1 class="logo">.gg/shaderss</h1>
-            <p class="tagline">Discord Bot • 24/7 • Advanced Features</p>
-            <div class="btn-group">
-                <a href="https://discord.com/oauth2/authorize?client_id=${process.env.CLIENT_ID || 'IL_TUO_CLIENT_ID'}&scope=bot+applications.commands&permissions=8" class="btn">
-                    <i class="fas fa-robot"></i>Invita Bot
-                </a>
+    <!-- Stats Section -->
+    <section class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="guildsCount">-</div>
+                <div class="stat-label">Server Attivi</div>
             </div>
-        </header>
+            <div class="stat-card">
+                <div class="stat-number" id="ticketsCount">-</div>
+                <div class="stat-label">Ticket Gestiti</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="uptimePercent">100%</div>
+                <div class="stat-label">Uptime</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="usersCount">-</div>
+                <div class="stat-label">Utenti Serviti</div>
+            </div>
+        </div>
+    </section>
 
-        <!-- Main Grid -->
-        <div class="main-grid">
-            <!-- Status Card -->
-            <div class="card">
-                <h2><i class="fas fa-heart-pulse"></i> Bot Status</h2>
-                <div class="status-item">
-                    <span class="status-label">Stato</span>
-                    <span class="status-value status-online" id="statusText">ONLINE</span>
+    <!-- Features Section -->
+    <section class="container">
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-ticket-alt"></i>
                 </div>
-                <div class="status-item">
-                    <span class="status-label">Tag</span>
-                    <span class="status-value" id="tag">-</span>
+                <h3 class="feature-title">Sistema Ticket</h3>
+                <p class="feature-description">
+                    Gestione ticket avanzata con categorie personalizzabili, 
+                    chiusura automatica e transcript dettagliati.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-comments"></i>
                 </div>
+                <h3 class="feature-title">Chat Live</h3>
+                <p class="feature-description">
+                    Interfaccia di chat in tempo reale per comunicare con 
+                    gli utenti direttamente dal pannello web.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h3 class="feature-title">Moderazione</h3>
+                <p class="feature-description">
+                    Tool di moderazione completi con log dettagliati e 
+                    sistema di ruoli avanzato per lo staff.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Status Section -->
+    <section class="container">
+        <div class="status-section">
+            <div class="status-header">
+                <h2 class="status-title">Stato Sistema</h2>
+                <div class="status-badge" id="globalStatus">
+                    <span class="status-value status-online">ONLINE</span>
+                </div>
+            </div>
+            <div class="status-grid">
                 <div class="status-item">
-                    <span class="status-label">Server</span>
-                    <span class="status-value" id="guilds">-</span>
+                    <span class="status-label">Stato Bot</span>
+                    <span class="status-value status-online" id="botStatus">ONLINE</span>
                 </div>
                 <div class="status-item">
                     <span class="status-label">Ping</span>
-                    <span class="status-value" id="ping">- ms</span>
+                    <span class="status-value" id="botPing">- ms</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Server</span>
+                    <span class="status-value" id="botGuilds">-</span>
                 </div>
                 <div class="status-item">
                     <span class="status-label">Uptime</span>
-                    <span class="status-value" id="uptime">-</span>
-                </div>
-            </div>
-
-            <!-- Discord Widget Card -->
-            <div class="card">
-                <h2><i class="fab fa-discord"></i> Server Live</h2>
-                <p style="color: var(--text-secondary); margin-bottom: 15px; font-size: 0.95rem;">
-                    Unisciti alla nostra community Discord
-                </p>
-                <div class="widget-container">
-                    <iframe src="https://discord.com/widget?id=1431629401384026234&theme=dark" 
-                            width="100%" height="350" allowtransparency="true" frameborder="0"
-                            sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts">
-                    </iframe>
+                    <span class="status-value" id="botUptime">-</span>
                 </div>
             </div>
         </div>
+    </section>
 
-        <!-- Additional Info Card -->
-        <div class="card">
-            <h2><i class="fas fa-star"></i> Caratteristiche</h2>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
-                <div style="text-align: center; padding: 15px; background: var(--border); border-radius: 8px;">
-                    <i class="fas fa-ticket-alt" style="color: var(--primary); font-size: 1.5rem; margin-bottom: 8px;"></i>
-                    <div style="font-weight: 600;">Sistema Ticket</div>
-                    <div style="font-size: 0.85rem; color: var(--text-muted);">Supporto avanzato</div>
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>.gg/shaderss</h3>
+                    <p style="color: var(--text-secondary);">
+                        Bot Discord avanzato per la gestione di community 
+                        con strumenti professionali per moderazione e supporto.
+                    </p>
                 </div>
-                <div style="text-align: center; padding: 15px; background: var(--border); border-radius: 8px;">
-                    <i class="fas fa-shield-alt" style="color: var(--success); font-size: 1.5rem; margin-bottom: 8px;"></i>
-                    <div style="font-weight: 600;">Moderazione</div>
-                    <div style="font-size: 0.85rem; color: var(--text-muted);">Tools completi</div>
+                <div class="footer-section">
+                    <h3>Link Rapidi</h3>
+                    <ul class="footer-links">
+                        <li><a href="/">Home</a></li>
+                        <li><a href="/transcripts">Transcript</a></li>
+                        <li><a href="/debug-permissions">Debug</a></li>
+                        <li><a href="/auth/discord">Login</a></li>
+                    </ul>
                 </div>
-                <div style="text-align: center; padding: 15px; background: var(--border); border-radius: 8px;">
-                    <i class="fas fa-bolt" style="color: var(--warning); font-size: 1.5rem; margin-bottom: 8px;"></i>
-                    <div style="font-weight: 600;">24/7 Uptime</div>
-                    <div style="font-size: 0.85rem; color: var(--text-muted);">Sempre online</div>
+                <div class="footer-section">
+                    <h3>Supporto</h3>
+                    <ul class="footer-links">
+                        <li><a href="https://discord.gg/shaderss" target="_blank">Server Discord</a></li>
+                        <li><a href="/health">Status</a></li>
+                        <li><a href="/api/status">API Status</a></li>
+                    </ul>
                 </div>
             </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 .gg/shaderss • Powered by sasa111</p>
+            </div>
         </div>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p class="powered-by">Powered by <strong>sasa111</strong></p>
-        </footer>
-    </div>
+    </footer>
 
     <script>
         async function updateStatus() {
@@ -3114,34 +3471,54 @@ app.get('/', (req, res) => {
                 const res = await fetch('/api/status');
                 const data = await res.json();
                 
+                // Aggiorna status bot
                 if (data.bot.status === 'ONLINE') {
-                    document.getElementById('statusText').className = 'status-value status-online';
-                    document.getElementById('statusText').textContent = 'ONLINE';
+                    document.getElementById('botStatus').className = 'status-value status-online';
+                    document.getElementById('botStatus').textContent = 'ONLINE';
+                    document.getElementById('globalStatus').innerHTML = '<span class="status-value status-online">SISTEMA ONLINE</span>';
                 } else {
-                    document.getElementById('statusText').className = 'status-value status-offline';
-                    document.getElementById('statusText').textContent = 'OFFLINE';
+                    document.getElementById('botStatus').className = 'status-value status-offline';
+                    document.getElementById('botStatus').textContent = 'OFFLINE';
+                    document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">SISTEMA OFFLINE</span>';
                 }
                 
-                document.getElementById('tag').textContent = data.bot.tag.split('#')[0] || '-';
-                document.getElementById('guilds').textContent = data.bot.guilds || '-';
-                document.getElementById('ping').textContent = data.bot.ping + ' ms' || '- ms';
-                document.getElementById('uptime').textContent = data.bot.uptime || '-';
+                // Aggiorna dati
+                document.getElementById('botPing').textContent = data.bot.ping + ' ms' || '- ms';
+                document.getElementById('botGuilds').textContent = data.bot.guilds || '-';
+                document.getElementById('botUptime').textContent = data.bot.uptime || '-';
+                document.getElementById('guildsCount').textContent = data.bot.guilds || '-';
                 
             } catch(e) {
                 console.error('Errore aggiornamento status:', e);
-                document.getElementById('statusText').className = 'status-value status-offline';
-                document.getElementById('statusText').textContent = 'OFFLINE';
+                document.getElementById('botStatus').className = 'status-value status-offline';
+                document.getElementById('botStatus').textContent = 'OFFLINE';
+                document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">ERRORE CONNESSIONE</span>';
             }
         }
 
+        // Aggiorna ogni 10 secondi
         updateStatus();
         setInterval(updateStatus, 10000);
+
+        // Animazioni al caricamento
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.feature-card, .stat-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
     </script>
 </body>
 </html>
     `);
 });
-
 // Avvia server web
 let server;
 try {
