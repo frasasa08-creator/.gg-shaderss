@@ -392,6 +392,57 @@ app.get('/logout', (req, res) => {
     });
 });
 
+// === FUNZIONI HELPER PER STATISTICHE ===
+async function getTicketStats() {
+    try {
+        // Conta tutti i ticket creati (aperti + chiusi)
+        const ticketsResult = await db.query('SELECT COUNT(*) as total_tickets FROM tickets');
+        const totalTickets = parseInt(ticketsResult.rows[0].total_tickets) || 0;
+
+        // Conta utenti unici che hanno creato ticket
+        const usersResult = await db.query('SELECT COUNT(DISTINCT user_id) as unique_users FROM tickets');
+        const uniqueUsers = parseInt(usersResult.rows[0].unique_users) || 0;
+
+        return {
+            totalTickets,
+            uniqueUsers
+        };
+    } catch (error) {
+        console.error('❌ Errore recupero statistiche ticket:', error);
+        return {
+            totalTickets: 0,
+            uniqueUsers: 0
+        };
+    }
+}
+
+async function getLiveStats() {
+    try {
+        // Ticket aperti in questo momento
+        const openTicketsResult = await db.query('SELECT COUNT(*) as open_tickets FROM tickets WHERE status = $1', ['open']);
+        const openTickets = parseInt(openTicketsResult.rows[0].open_tickets) || 0;
+
+        // Ticket chiusi oggi
+        const today = new Date().toISOString().split('T')[0];
+        const todayTicketsResult = await db.query(
+            'SELECT COUNT(*) as today_tickets FROM tickets WHERE DATE(created_at) = $1',
+            [today]
+        );
+        const todayTickets = parseInt(todayTicketsResult.rows[0].today_tickets) || 0;
+
+        return {
+            openTickets,
+            todayTickets
+        };
+    } catch (error) {
+        console.error('❌ Errore recupero statistiche live:', error);
+        return {
+            openTickets: 0,
+            todayTickets: 0
+        };
+    }
+}
+
 // === ROTTE PUBBLICHE ===
 app.get('/health', (req, res) => {
     if (client && client.isReady()) {
@@ -2231,9 +2282,12 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 3rem 0;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .stat-card {
@@ -2458,22 +2512,19 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
             </div>
         </div>
 
-        <!-- STATISTICHE -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number stat-open">${openTickets.rows.length}</div>
-                <div>Ticket Aperti</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number stat-closed">${closedTickets.rows.length}</div>
-                <div>Ticket Chiusi</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number stat-transcripts">${availableTranscripts.length}</div>
-                <div>Transcript Disponibili</div>
-            </div>
-        </div>
-
+                <!-- Stats Section -->
+                <section class="container">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalTicketsCount">-</div>
+                            <div class="stat-label">Ticket Gestiti</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="uniqueUsersCount">-</div>
+                            <div class="stat-label">Utenti Serviti</div>
+                        </div>
+                    </div>
+                </section>
         <!-- TICKET APERTI -->
         <div class="section">
             <div class="section-header">
@@ -2637,6 +2688,19 @@ app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     } catch (error) {
         console.error('❌ Errore nel caricamento gestione ticket:', error);
         res.status(500).send('Errore interno del server');
+    }
+});
+
+// === DEBUG DATABASE TICKETS ===
+app.get('/debug-tickets', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM tickets ORDER BY created_at DESC LIMIT 10');
+        res.json({
+            totalTickets: result.rows.length,
+            tickets: result.rows
+        });
+    } catch (error) {
+        res.json({ error: error.message });
     }
 });
 
@@ -3466,39 +3530,46 @@ app.get('/', (req, res) => {
     </footer>
 
     <script>
-        async function updateStatus() {
-            try {
-                const res = await fetch('/api/status');
-                const data = await res.json();
-                
-                // Aggiorna status bot
-                if (data.bot.status === 'ONLINE') {
-                    document.getElementById('botStatus').className = 'status-value status-online';
-                    document.getElementById('botStatus').textContent = 'ONLINE';
-                    document.getElementById('globalStatus').innerHTML = '<span class="status-value status-online">SISTEMA ONLINE</span>';
-                } else {
+            async function updateStatus() {
+                try {
+                    // Aggiorna status bot
+                    const statusRes = await fetch('/api/status');
+                    const statusData = await statusRes.json();
+                    
+                    if (statusData.bot.status === 'ONLINE') {
+                        document.getElementById('botStatus').className = 'status-value status-online';
+                        document.getElementById('botStatus').textContent = 'ONLINE';
+                        document.getElementById('globalStatus').innerHTML = '<span class="status-value status-online">SISTEMA ONLINE</span>';
+                    } else {
+                        document.getElementById('botStatus').className = 'status-value status-offline';
+                        document.getElementById('botStatus').textContent = 'OFFLINE';
+                        document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">SISTEMA OFFLINE</span>';
+                    }
+                    
+                    document.getElementById('botPing').textContent = statusData.bot.ping + ' ms' || '- ms';
+                    document.getElementById('botGuilds').textContent = statusData.bot.guilds || '-';
+                    document.getElementById('botUptime').textContent = statusData.bot.uptime || '-';
+    
+                    // Aggiorna statistiche ticket
+                    const statsRes = await fetch('/api/stats');
+                    const statsData = await statsRes.json();
+                    
+                    document.getElementById('openTicketsCount').textContent = statsData.openTickets || '0';
+                    document.getElementById('totalTicketsCount').textContent = statsData.totalTickets || '0';
+                    document.getElementById('uniqueUsersCount').textContent = statsData.uniqueUsers || '0';
+                    document.getElementById('todayTicketsCount').textContent = statsData.todayTickets || '0';
+                    
+                } catch(e) {
+                    console.error('Errore aggiornamento status:', e);
                     document.getElementById('botStatus').className = 'status-value status-offline';
                     document.getElementById('botStatus').textContent = 'OFFLINE';
-                    document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">SISTEMA OFFLINE</span>';
+                    document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">ERRORE CONNESSIONE</span>';
                 }
-                
-                // Aggiorna dati
-                document.getElementById('botPing').textContent = data.bot.ping + ' ms' || '- ms';
-                document.getElementById('botGuilds').textContent = data.bot.guilds || '-';
-                document.getElementById('botUptime').textContent = data.bot.uptime || '-';
-                document.getElementById('guildsCount').textContent = data.bot.guilds || '-';
-                
-            } catch(e) {
-                console.error('Errore aggiornamento status:', e);
-                document.getElementById('botStatus').className = 'status-value status-offline';
-                document.getElementById('botStatus').textContent = 'OFFLINE';
-                document.getElementById('globalStatus').innerHTML = '<span class="status-value status-offline">ERRORE CONNESSIONE</span>';
             }
-        }
-
-        // Aggiorna ogni 10 secondi
-        updateStatus();
-        setInterval(updateStatus, 10000);
+    
+            // Aggiorna ogni 10 secondi
+            updateStatus();
+            setInterval(updateStatus, 10000);
 
         // Animazioni al caricamento
         document.addEventListener('DOMContentLoaded', function() {
@@ -3519,6 +3590,32 @@ app.get('/', (req, res) => {
 </html>
     `);
 });
+
+// === NUOVA API PER STATISTICHE ===
+app.get('/api/stats', async (req, res) => {
+    try {
+        const stats = await getTicketStats();
+        const liveStats = await getLiveStats();
+        
+        res.json({
+            success: true,
+            ...stats,
+            ...liveStats,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Errore API stats:', error);
+        res.json({
+            success: false,
+            totalTickets: 0,
+            uniqueUsers: 0,
+            openTickets: 0,
+            todayTickets: 0,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Avvia server web
 let server;
 try {
