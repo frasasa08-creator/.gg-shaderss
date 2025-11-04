@@ -101,48 +101,6 @@ const globalCSS = `
             border-color: var(--primary);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
-
-        /* Sfondo Animato */
-        .animated-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            overflow: hidden;
-        }
-        
-        .animated-bg::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: 
-                radial-gradient(circle at 20% 80%, rgba(88, 101, 242, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(0, 255, 136, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(250, 168, 26, 0.05) 0%, transparent 50%);
-            animation: float 20s ease-in-out infinite;
-        }
-        
-        .animated-bg::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: 
-                linear-gradient(45deg, rgba(10, 10, 10, 0.9) 0%, rgba(17, 17, 17, 0.95) 100%);
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); }
-            33% { transform: translate(30px, -30px) rotate(120deg); }
-            66% { transform: translate(-20px, 20px) rotate(240deg); }
-}
     </style>
 `;
 
@@ -370,18 +328,16 @@ app.use((err, req, res, next) => {
             </style>
         </head>
         <body>
-            <div class="animated-bg">
-                <h1>❌ Errore Interno del Server</h1>
-                <p>Si è verificato un errore durante l'autenticazione.</p>
-                
-                <div class="error-details">
-                    <strong>Dettagli errore:</strong><br>
-                    ${err.message || 'Errore sconosciuto'}
-                </div>
-                
-                <a href="/auth/discord" class="btn">Riprova Login</a>
-                <a href="/" class="btn">Torna alla Home</a>
+            <h1>❌ Errore Interno del Server</h1>
+            <p>Si è verificato un errore durante l'autenticazione.</p>
+            
+            <div class="error-details">
+                <strong>Dettagli errore:</strong><br>
+                ${err.message || 'Errore sconosciuto'}
             </div>
+            
+            <a href="/auth/discord" class="btn">Riprova Login</a>
+            <a href="/" class="btn">Torna alla Home</a>
         </body>
         </html>
     `);
@@ -405,7 +361,6 @@ app.get('/auth/failure', (req, res) => {
             </style>
         </head>
         <body>
-        <div class="animated-bg">
             <h1>❌ Autenticazione Fallita</h1>
             <p>Impossibile accedere con Discord.</p>
             
@@ -417,7 +372,6 @@ app.get('/auth/failure', (req, res) => {
             
             <a href="/auth/discord" class="btn">Riprova Login</a>
             <a href="/" class="btn">Torna alla Home</a>
-          </div>
         </body>
         </html>
     `);
@@ -716,11 +670,9 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
                     </style>
                 </head>
                 <body>
-                <div class="animated-bg">
                     <h1>❌ Ticket Non Trovato</h1>
                     <p>Il ticket richiesto non esiste o non è più disponibile.</p>
                     <a href="/transcripts" class="btn">Torna ai Transcript</a>
-                </div>
                 </body>
                 </html>
             `);
@@ -744,11 +696,9 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
                     </style>
                 </head>
                 <body>
-                <div class="animated-bg">
                     <h1>❌ Accesso Negato</h1>
                     <p>Non hai i permessi per accedere a questa chat.</p>
                     <a href="/transcripts" class="btn">Torna ai Transcript</a>
-                </div>
                 </body>
                 </html>
             `);
@@ -1139,7 +1089,6 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
     </style>
 </head>
 <body>
-<div class="animated-bg">
     <a href="/transcripts" class="back-btn">
         <i class="fas fa-arrow-left"></i>
         Torna ai Ticket
@@ -1451,7 +1400,6 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
         stopChatUpdates();
     });
 </script>
-</div>
 </body>
 </html>
         `);
@@ -1468,81 +1416,17 @@ app.get('/chat/:ticketId', checkStaffRole, async (req, res) => {
                 </style>
             </head>
             <body>
-            <div class="animated-bg">
                 <h1>❌ Errore Caricamento Chat</h1>
                 <p>Si è verificato un errore durante il caricamento della chat.</p>
                 <a href="/transcripts" class="btn">Torna ai Transcript</a>
-            </div>
             </body>
             </html>
         `);
     }
 });
 
-// === SISTEMA NOTIFICHE ===
-async function getUnreadNotifications(guildId = null) {
-    try {
-        let query = `
-            SELECT t.id, t.guild_id, t.channel_id, t.ticket_type, t.user_id, 
-                   COUNT(m.id) as unread_count,
-                   MAX(m.timestamp) as last_activity
-            FROM tickets t
-            LEFT JOIN messages m ON t.id::text = m.ticket_id 
-                AND m.timestamp > COALESCE(t.last_viewed, t.created_at)
-                AND m.is_staff = false
-            WHERE t.status = 'open'
-        `;
-        
-        const params = [];
-        if (guildId) {
-            query += ' AND t.guild_id = $1';
-            params.push(guildId);
-        }
-        
-        query += ' GROUP BY t.id, t.guild_id, t.channel_id, t.ticket_type, t.user_id';
-        
-        const result = await db.query(query, params);
-        
-        let totalUnread = 0;
-        const notifications = result.rows.map(row => {
-            const unread = parseInt(row.unread_count) || 0;
-            totalUnread += unread;
-            return {
-                ticketId: row.id,
-                guildId: row.guild_id,
-                channelId: row.channel_id,
-                ticketType: row.ticket_type,
-                userId: row.user_id,
-                unreadCount: unread,
-                lastActivity: row.last_activity
-            };
-        });
-
-        return {
-            totalUnread,
-            notifications
-        };
-    } catch (error) {
-        console.error('❌ Errore recupero notifiche:', error);
-        return { totalUnread: 0, notifications: [] };
-    }
-}
-
-async function markTicketAsViewed(ticketId) {
-    try {
-        await db.query(
-            'UPDATE tickets SET last_viewed = NOW() WHERE id = $1',
-            [ticketId]
-        );
-        return true;
-    } catch (error) {
-        console.error('❌ Errore marcatura ticket come letto:', error);
-        return false;
-    }
-}
-
 // === ROTTA TRANSCRIPT ONLINE MIGLIORATA ===
-app.get('/transcripts/:identifier', (req, res) => {
+app.get('/transcript/:identifier', (req, res) => {
     const identifier = req.params.identifier;
     const transcriptDir = path.join(__dirname, 'transcripts');
     
@@ -1702,7 +1586,6 @@ app.get('/transcripts/:identifier', (req, res) => {
     </style>
 </head>
 <body>
-<div class="animated-bg">
     <h1>🔍 Transcript Non Trovato</h1>
     
     <div class="warning">
@@ -1749,7 +1632,6 @@ app.get('/transcripts/:identifier', (req, res) => {
             <li>Il transcript non è stato ancora generato</li>
         </ul>
     </div>
-</div>
 </body>
 </html>
     `);
@@ -1871,7 +1753,6 @@ async function checkStaffRole(req, res, next) {
                 </style>
             </head>
             <body>
-            <div class="animated-bg">
                 <h1>❌ Accesso Negato ai Transcript</h1>
                 <p>Non hai i permessi necessari per accedere alla sezione transcript.</p>
                 
@@ -1894,7 +1775,6 @@ async function checkStaffRole(req, res, next) {
                     <a href="/" class="btn">🏠 Torna alla Home</a>
                     <a href="/logout" class="btn">🚪 Logout</a>
                 </div>
-            </div>
             </body>
             </html>
         `);
@@ -1905,17 +1785,17 @@ async function checkStaffRole(req, res, next) {
     }
 }
 
-// === DASHBOARD MODERNA ===
-app.get('/dashboard', checkStaffRole, async (req, res) => {
+// === ROTTA PER SELEZIONARE IL SERVER ===
+app.get('/transcripts', checkStaffRole, async (req, res) => {
     try {
         const userGuilds = req.user.guilds || [];
         const accessibleGuilds = [];
-        const notifications = await getUnreadNotifications();
 
         // Trova tutti i server dove l'utente ha accesso + dove il bot è presente
         for (const guild of userGuilds) {
+            // Verifica se il bot è in questo server
             const botGuild = client.guilds.cache.get(guild.id);
-            if (!botGuild) continue;
+            if (!botGuild) continue; // Salta se il bot non è nel server
 
             const result = await db.query(
                 'SELECT settings FROM guild_settings WHERE guild_id = $1',
@@ -1930,315 +1810,308 @@ app.get('/dashboard', checkStaffRole, async (req, res) => {
                 const isAdmin = (guild.permissions & 0x8) === 0x8;
 
                 if (hasAllowedRole || isAdmin) {
-                    const guildNotifications = await getUnreadNotifications(guild.id);
                     accessibleGuilds.push({
                         id: guild.id,
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
-                        botPresent: true,
-                        unreadCount: guildNotifications.totalUnread
+                        botPresent: true
                     });
                 }
             } else {
+                // Se non ci sono impostazioni, solo admin può accedere
                 const isAdmin = (guild.permissions & 0x8) === 0x8;
                 if (isAdmin) {
-                    const guildNotifications = await getUnreadNotifications(guild.id);
                     accessibleGuilds.push({
                         id: guild.id,
                         name: guild.name,
                         icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
                         memberCount: guild.approximate_member_count || 'N/A',
-                        botPresent: true,
-                        unreadCount: guildNotifications.totalUnread
+                        botPresent: true
                     });
                 }
             }
         }
 
+        // Se non ci sono server accessibili
         if (accessibleGuilds.length === 0) {
             return res.status(403).send(`
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <title>Nessun Accesso</title>
-                    <style>body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }</style>
+                    <style>
+                        body { background: #1e1f23; color: #ed4245; font-family: sans-serif; text-align: center; padding: 100px; }
+                        .btn { display: inline-block; background: #5865F2; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin: 10px; }
+                    </style>
                 </head>
                 <body>
-                <div class="animated-bg">
                     <h1>❌ Nessun Server Accessibile</h1>
-                    <p>Non hai i permessi per gestire ticket in nessun server.</p>
-                    <a href="/" style="color: #5865F2;">Torna alla Home</a>
-                </div>
+                    <p>Non hai i permessi per visualizzare i transcript in nessun server dove il bot è presente.</p>
+                    <a href="/" class="btn">Torna alla Home</a>
                 </body>
                 </html>
             `);
         }
 
-        const header = generateHeader(req);
-        
+        // Mostra il menu di selezione server
+        const serverOptions = accessibleGuilds.map(guild => `
+            <div class="server-option" onclick="selectServer('${guild.id}')">
+                <div class="server-icon">
+                    ${guild.icon ? `<img src="${guild.icon}" alt="${guild.name}">` : '<div class="default-icon"><i class="fas fa-server"></i></div>'}
+                </div>
+                <div class="server-info">
+                    <div class="server-name">${guild.name}</div>
+                    <div class="server-meta">
+                        <span class="server-id">ID: ${guild.id}</span>
+                        <span class="server-members"><i class="fas fa-users"></i> ${guild.memberCount}</span>
+                        <span class="bot-status"><i class="fas fa-robot"></i> Bot Online</span>
+                    </div>
+                </div>
+                <div class="server-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </div>
+        `).join('');
+
         res.send(`
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - .gg/shaderss</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Seleziona Server - Transcript</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
-        ${globalCSS}
-        
-        .dashboard-header {
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #5865F2;
+            --primary-dark: #4752c4;
+            --success: #00ff88;
+            --background: #0f0f12;
+            --card-bg: #1a1a1d;
+            --text-primary: #ffffff;
+            --text-secondary: #b9bbbe;
+            --border: #2f3136;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
             text-align: center;
-            padding: 4rem 0 2rem;
-        }
-        
-        .dashboard-title {
-            font-size: 3rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 1rem;
-        }
-        
-        .dashboard-subtitle {
-            color: var(--text-secondary);
-            font-size: 1.2rem;
-            margin-bottom: 3rem;
-        }
-        
-        .servers-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 2rem;
-            margin: 3rem 0;
-        }
-        
-        .server-card {
+            margin-bottom: 40px;
+            padding: 30px;
             background: var(--card-bg);
-            border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 2rem;
-            transition: all 0.3s ease;
-            position: relative;
-            cursor: pointer;
+            border: 1px solid var(--border);
         }
-        
-        .server-card:hover {
-            transform: translateY(-8px);
-            border-color: var(--primary);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-        }
-        
-        .server-header {
+
+        .header h1 {
+            color: var(--text-primary);
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
+            justify-content: center;
+            gap: 10px;
         }
-        
-        .server-icon {
-            width: 60px;
-            height: 60px;
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 10px;
+            background: var(--border);
+            border-radius: 8px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .server-selection {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .server-option {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
             border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .server-option:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        .server-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .server-icon img {
+            width: 100%;
+            height: 100%;
             object-fit: cover;
         }
-        
+
         .default-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 12px;
+            width: 100%;
+            height: 100%;
             background: var(--primary);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
         }
-        
+
         .server-info {
             flex: 1;
         }
-        
+
         .server-name {
-            font-size: 1.3rem;
             font-weight: 600;
-            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
             color: var(--text-primary);
         }
-        
+
         .server-meta {
             display: flex;
-            gap: 1rem;
+            gap: 15px;
+            font-size: 0.85rem;
             color: var(--text-secondary);
-            font-size: 0.9rem;
         }
-        
-        .server-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 1.5rem;
+
+        .server-members, .bot-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
-        
-        .stat {
+
+        .bot-status {
+            color: var(--success);
+        }
+
+        .server-arrow {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .footer {
             text-align: center;
-            padding: 1rem;
-            background: var(--surface);
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--border);
+            color: var(--text-primary);
+            text-decoration: none;
             border-radius: 8px;
+            transition: background 0.3s ease;
         }
-        
-        .stat-number {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 0.25rem;
+
+        .btn:hover {
+            background: var(--primary);
         }
-        
-        .stat-label {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-        
-        .notification-badge {
-            background: var(--error);
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            font-weight: 600;
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-        }
-        
-        .nav-notification-badge {
-            background: var(--error);
-            color: white;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.6rem;
-            font-weight: 600;
-            margin-left: 0.5rem;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-secondary);
-        }
-        
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            color: var(--border);
+
+        @media (max-width: 768px) {
+            .server-meta {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .server-option {
+                padding: 15px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="animated-bg">
-    ${header}
-
     <div class="container">
-        <div class="dashboard-header">
-            <h1 class="dashboard-title">Dashboard</h1>
-            <p class="dashboard-subtitle">Gestisci i ticket e le notifiche dei tuoi server</p>
-        </div>
-
-        <div class="servers-grid">
-            ${accessibleGuilds.map(guild => `
-                <div class="server-card" onclick="selectServer('${guild.id}')">
-                    ${guild.unreadCount > 0 ? `<div class="notification-badge">${guild.unreadCount}</div>` : ''}
-                    
-                    <div class="server-header">
-                        ${guild.icon ? 
-                            `<img src="${guild.icon}" class="server-icon" alt="${guild.name}">` : 
-                            `<div class="default-icon"><i class="fas fa-server"></i></div>`
-                        }
-                        <div class="server-info">
-                            <div class="server-name">${guild.name}</div>
-                            <div class="server-meta">
-                                <span><i class="fas fa-users"></i> ${guild.memberCount} membri</span>
-                                <span><i class="fas fa-robot"></i> Bot Online</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="server-stats">
-                        <div class="stat">
-                            <div class="stat-number">${guild.unreadCount}</div>
-                            <div class="stat-label">Notifiche</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-number"><i class="fas fa-ticket-alt"></i></div>
-                            <div class="stat-label">Ticket Attivi</div>
-                        </div>
-                    </div>
-                </div>
-            `).join('')}
-        </div>
-
-        ${accessibleGuilds.length === 0 ? `
-            <div class="empty-state">
-                <i class="fas fa-inbox"></i>
-                <h3>Nessun server disponibile</h3>
-                <p>Non hai accesso a nessun server con il bot attivo.</p>
+        <div class="header">
+            <h1><i class="fas fa-server"></i> Seleziona Server</h1>
+            <p>Scegli il server Discord di cui vuoi gestire i ticket</p>
+            
+            <div class="user-info">
+                <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
+                     class="user-avatar" alt="Avatar">
+                <span>${req.user.username}</span>
             </div>
-        ` : ''}
+        </div>
+
+        <div class="server-selection">
+            ${serverOptions}
+        </div>
+
+        <div class="footer">
+            <a href="/" class="btn">
+                <i class="fas fa-arrow-left"></i> Torna alla Home
+            </a>
+        </div>
     </div>
 
     <script>
         function selectServer(guildId) {
-            window.location.href = '/dashboard/' + guildId;
+            window.location.href = '/transcripts/' + guildId;
         }
-        
-        // Aggiorna notifiche in tempo reale
-        async function updateNotifications() {
-            try {
-                const response = await fetch('/api/notifications');
-                const data = await response.json();
-                
-                if (data.success) {
-                    const badge = document.getElementById('globalNotificationBadge');
-                    if (data.totalUnread > 0) {
-                        badge.textContent = data.totalUnread;
-                        badge.style.display = 'flex';
-                    } else {
-                        badge.style.display = 'none';
-                    }
-                }
-            } catch (error) {
-                console.error('Errore aggiornamento notifiche:', error);
-            }
-        }
-        
-        // Aggiorna ogni 30 secondi
-        setInterval(updateNotifications, 30000);
-        updateNotifications();
     </script>
-</div>
 </body>
 </html>
         `);
     } catch (error) {
-        console.error('❌ Errore nella dashboard:', error);
+        console.error('❌ Errore nella selezione server:', error);
         res.status(500).send('Errore interno del server');
     }
 });
 
 // === ROTTA COMPLETA PER GESTIONE TICKET ===
-app.get('/dashboard/:guildId', checkStaffRole, async (req, res) => {
+app.get('/transcripts/:guildId', checkStaffRole, async (req, res) => {
     try {
         const guildId = req.params.guildId;
         const userGuilds = req.user.guilds || [];
@@ -2621,7 +2494,6 @@ app.get('/dashboard/:guildId', checkStaffRole, async (req, res) => {
     </style>
 </head>
 <body>
-<div class="animated-bg">
     <div class="container">
         <div class="header">
             <h1><i class="fas fa-shield-alt"></i> Staff Area - Gestione Ticket</h1>
@@ -2808,7 +2680,6 @@ app.get('/dashboard/:guildId', checkStaffRole, async (req, res) => {
             }
         }
     </script>
-</div>
 </body>
 </html>`;
 
@@ -2981,7 +2852,6 @@ app.get('/debug-permissions', async (req, res) => {
                 </style>
             </head>
             <body>
-            <div class="animated-bg">
                 <h1>🔍 Debug Permessi - ${userInfo.username}</h1>
                 
                 ${userInfo.guilds.map(guild => `
@@ -3004,7 +2874,6 @@ app.get('/debug-permissions', async (req, res) => {
                 
                 <br>
                 <a href="/" style="color: #5865F2;">← Torna alla Home</a>
-            </div>
             </body>
             </html>
         `);
@@ -3024,10 +2893,7 @@ function generateHeader(req) {
                     <div class="logo">.gg/shaderss</div>
                     <nav class="nav-links">
                         <a href="/" class="nav-link">Home</a>
-                        <a href="/dashboard" class="nav-link">
-                            Dashboard
-                            <span class="notification-badge" id="globalNotificationBadge" style="display: none;">0</span>
-                        </a>
+                        <a href="/transcripts" class="nav-link">Transcript</a>
                     </nav>
                     <div class="user-section">
                         <img src="${req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}" 
@@ -3042,6 +2908,7 @@ function generateHeader(req) {
         </header>
     `;
 }
+
 // === HOMEPAGE ===
 app.get('/', (req, res) => {
     console.log('🏠 Homepage richiesta - Utente autenticato:', req.isAuthenticated());
@@ -3496,7 +3363,6 @@ app.get('/', (req, res) => {
     </style>
 </head>
 <body>
-<div class="animated-bg">
     <!-- Header -->
     <header class="modern-header">
         <div class="container">
@@ -3722,7 +3588,6 @@ app.get('/', (req, res) => {
                 });
             });
       </script>
-</div>
 </body>
 </html>
     `);
@@ -3809,100 +3674,6 @@ app.get('/api/status', (req, res) => {
                 timestamp: new Date().toISOString()
             }
         });
-    }
-});
-
-// === API CHIUSURA TICKET ===
-app.post('/api/ticket/close', checkStaffRole, async (req, res) => {
-    try {
-        const { ticketId, reason } = req.body;
-        const username = req.user.username;
-
-        console.log(`🔒 Chiusura ticket ${ticketId} da ${username}: ${reason}`);
-
-        // 1. Trova il ticket
-        const ticketResult = await db.query(
-            'SELECT * FROM tickets WHERE id::text = $1 OR channel_id = $1',
-            [ticketId]
-        );
-        
-        if (ticketResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Ticket non trovato' });
-        }
-
-        const ticket = ticketResult.rows[0];
-
-        // 2. Chiudi il ticket nel database
-        await db.query(
-            'UPDATE tickets SET status = $1, closed_at = NOW(), close_reason = $2 WHERE id = $3',
-            ['closed', reason || 'Chiuso dal pannello web', ticket.id]
-        );
-
-        // 3. Invia messaggio di chiusura su Discord
-        const channel = client.channels.cache.get(ticket.channel_id);
-        if (channel) {
-            const closeMessage = `🎫 **TICKET CHIUSO**\n\n**Staff:** ${username}\n**Motivo:** ${reason || 'Chiuso dal pannello web'}\n\nIl ticket è stato chiuso.`;
-            await channel.send(closeMessage);
-            
-            // Opzionale: elimina il canale dopo qualche secondo
-            setTimeout(async () => {
-                try {
-                    await channel.delete('Ticket chiuso dal pannello web');
-                } catch (deleteError) {
-                    console.log('⚠️ Impossibile eliminare il canale:', deleteError.message);
-                }
-            }, 5000);
-        }
-
-        // 4. Marca come letto
-        await markTicketAsViewed(ticket.id);
-
-        res.json({ 
-            success: true, 
-            message: 'Ticket chiuso con successo',
-            ticketId: ticket.id
-        });
-
-    } catch (error) {
-        console.error('❌ Errore chiusura ticket:', error);
-        res.status(500).json({ error: 'Errore interno del server' });
-    }
-});
-
-// === API NOTIFICHE ===
-app.get('/api/notifications', checkStaffRole, async (req, res) => {
-    try {
-        const guildId = req.query.guildId || null;
-        const notifications = await getUnreadNotifications(guildId);
-        
-        res.json({
-            success: true,
-            ...notifications,
-            timestamp: new Date().toISOString()
-        });
-    } catch (error) {
-        console.error('❌ Errore API notifiche:', error);
-        res.json({
-            success: false,
-            totalUnread: 0,
-            notifications: [],
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-app.post('/api/notifications/mark-read', checkStaffRole, async (req, res) => {
-    try {
-        const { ticketId } = req.body;
-        const success = await markTicketAsViewed(ticketId);
-        
-        res.json({
-            success: success,
-            message: success ? 'Notifiche marcate come lette' : 'Errore'
-        });
-    } catch (error) {
-        console.error('❌ Errore marcatura notifiche:', error);
-        res.json({ success: false, error: error.message });
     }
 });
 
