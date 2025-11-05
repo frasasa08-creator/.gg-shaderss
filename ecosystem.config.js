@@ -21,7 +21,7 @@ module.exports = {
     
     env: {
       NODE_ENV: "production",
-      STATUS_WEBHOOK_URL: "https://discord.com/api/webhooks/IL_TUO_WEBHOOK_URL"
+      STATUS_WEBHOOK_URL: "https://discord.com/api/webhooks/1421106385281613838/AtaHjdpE9cyZ3r7ZASUtE0V8AM17NT6Gi4fNDkrEdrFnmB9ONTgK7RMZHx3VnpnqaM_g"
     }
   }],
 
