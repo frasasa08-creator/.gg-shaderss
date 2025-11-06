@@ -6,32 +6,29 @@ WEBHOOK="https://discord.com/api/webhooks/1421106385281613838/AtaHjdpE9cyZ3r7ZAS
 echo "🔍 Avvio monitoraggio bot..."
 
 while true; do
-    # Controlla se il bot è online
     if pm2 status | grep -q "discord-bot.*online"; then
         echo "✅ Bot online - $(date)"
     else
-        echo "❌ Bot OFFLINE! Riavvio..."
+        echo "❌ Bot OFFLINE! Invio notifica..."
         
-        curl -X POST "$WEBHOOK" \
+        # Webhook di notifica CRASH
+        curl -s -X POST "$WEBHOOK" \
           -H "Content-Type: application/json" \
-          -d '{"content": "🔴 Bot offline! Riavvio automatico..."}'
+          -d '{"content": "🔴 **CRASH BOT** - Il bot è crashato! Riavvio automatico in corso..."}' > /dev/null
         
-        # Forza il riavvio anche se stopped
+        echo "📤 Notifica crash inviata"
+        
+        # Riavvia il bot
         pm2 restart discord-bot
+        sleep 5
         
-        sleep 10
+        # Webhook di conferma RIAVVIO
+        curl -s -X POST "$WEBHOOK" \
+          -H "Content-Type: application/json" \
+          -d '{"content": "✅ **BOT RIAVVIATO** - Il bot è tornato online!"}' > /dev/null
         
-        # Conferma
-        if pm2 status | grep -q "discord-bot.*online"; then
-            curl -X POST "$WEBHOOK" \
-              -H "Content-Type: application/json" \
-              -d '{"content": "✅ Bot riavviato con successo!"}'
-        else
-            curl -X POST "$WEBHOOK" \
-              -H "Content-Type: application/json" \
-              -d '{"content": "❌ Errore nel riavvio del bot!"}'
-        fi
+        echo "📤 Conferma riavvio inviata"
     fi
-    sleep 60
+    sleep 30  # Controlla ogni 30 secondi invece di 60
 done
 EOF
