@@ -13,7 +13,7 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(interaction) {
-        const OWNER_IDS = ['1140218068417650823', '123456789012345678'];
+        const OWNER_IDS = ['1140218068417650823'];
         
         if (!OWNER_IDS.includes(interaction.user.id)) {
             return interaction.reply({ 
