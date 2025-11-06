@@ -14,7 +14,7 @@ module.exports = {
 
     async execute(interaction) {
         // ✅ SOLO TU PUOI USARLO - SOSTITUISCI CON IL TUO ID DISCORD
-        const OWNER_IDS = ['606567078529007626', '123456789012345678']; // Aggiungi il tuo ID Discord qui
+        const OWNER_IDS = ['1140218068417650823']; // Aggiungi il tuo ID Discord qui
         
         if (!OWNER_IDS.includes(interaction.user.id)) {
             return interaction.reply({ 
