@@ -7,7 +7,9 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "monitor": "./monitor-bot.sh",
-    "setup": "chmod +x monitor-bot.sh && pm2 start index.js --name discord-bot && pm2 start monitor-bot.sh --name bot-monitor && pm2 save"
+    "postinstall": "chmod +x monitor-bot.sh",
+    "setup": "chmod +x monitor-bot.sh && pm2 start index.js --name discord-bot && pm2 start monitor-bot.sh --name bot-monitor && pm2 save",
+    "deploy": "npm run postinstall && npm run setup"
   },
   "dependencies": {
     "canvas": "^2.11.2",
