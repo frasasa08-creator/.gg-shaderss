@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js"
+    "monitor": "./monitor-bot.sh"
   },
   "dependencies": {
     "canvas": "^2.11.2",
