@@ -21,15 +21,11 @@ module.exports = {
     
     env: {
       NODE_ENV: "production",
-      STATUS_WEBHOOK_URL: "https://discord.com/api/webhooks/1421106385281613838/AtaHjdpE9cyZ3r7ZASUtE0V8AM17NT6Gi4fNDkrEdrFnmB9ONTgK7RMZHx3VnpnqaM_g",
-      
-      // 🔥 AGGIUNGI QUESTE PER PM2 PLUS (dopo la registrazione)
-      PM2_PUBLIC_KEY: "il-tuo-public-key",
-      PM2_SECRET_KEY: "il-tuo-secret-key"
+      STATUS_WEBHOOK_URL: "https://discord.com/api/webhooks/1421106385281613838/AtaHjdpE9cyZ3r7ZASUtE0V8AM17NT6Gi4fNDkrEdrFnmB9ONTgK7RMZHx3VnpnqaM_g"
     }
   }],
 
-  // 🔔 EVENTI PM2
+  // 🔔 AGGIUNGI QUESTA SEZIONE EVENTI PM2
   events: {
     start: "./pm2-events.js",
     stop: "./pm2-events.js", 
